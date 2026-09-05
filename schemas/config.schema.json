@@ -1,0 +1,163 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Matryoshker repository config (contract v2)",
+  "description": "Schema for config/<repo>.json. See docs/data-contract.md, section 3. The pipeline is lenient (unknown keys warn); this schema is strict so editors and CI flag typos.",
+  "type": "object",
+  "required": ["repo"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Optional editor hint; ignored by the pipeline."
+    },
+    "repo": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Display name of the mapped repository. Also part of the viewer's localStorage key mtk:<repo>@<commit>."
+    },
+    "commit": {
+      "type": "string",
+      "default": "?",
+      "description": "Commit the map was built from (short SHA recommended). Shown in the header."
+    },
+    "date": {
+      "type": "string",
+      "default": "",
+      "description": "Build/snapshot date shown in the header; ISO YYYY-MM-DD recommended, displayed verbatim."
+    },
+    "data": {
+      "type": "string",
+      "description": "v1 alias of \"date\". Accepted silently; \"date\" wins when both are present."
+    },
+    "lang": {
+      "type": "string",
+      "enum": ["en", "pt-BR"],
+      "default": "en",
+      "description": "Viewer UI language. Any other value warns and falls back to \"en\"."
+    },
+    "categories": {
+      "type": "array",
+      "default": [],
+      "description": "Ordered list of categories. The first six non-gray ones get the palette slots in order; later ones share slot 6.",
+      "items": { "$ref": "#/definitions/category" }
+    },
+    "rules": {
+      "type": "array",
+      "default": [],
+      "description": "Ordered [prefix, category_id] pairs; the first prefix that matches path.startswith(prefix) wins.",
+      "items": { "$ref": "#/definitions/rule" }
+    },
+    "fallback_category": {
+      "type": "string",
+      "minLength": 1,
+      "default": "other",
+      "description": "Category of files no rule matches and that are not tests."
+    },
+    "test_path_marker": {
+      "type": ["string", "null"],
+      "default": "/tests",
+      "description": "Substring that marks test files. Empty string or null disables the check."
+    },
+    "test_category": {
+      "type": "string",
+      "minLength": 1,
+      "default": "tests",
+      "description": "Category assigned when test_path_marker is found in the path."
+    },
+    "hop_path_prefixes": {
+      "type": "array",
+      "default": [],
+      "description": "Prefixes tried, in order, when a cited path does not resolve as written (resolution: exact, each prefix + path, unique basename).",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "entry_points": {
+      "$ref": "#/definitions/entryPoints"
+    },
+    "urls_files": {
+      "type": "array",
+      "description": "DEPRECATED (v1). Accepted with a stderr warning and mapped to one django-drf parser entry with route_prefix \"\" and ignore_views []. Ignored when entry_points is present.",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "definitions": {
+    "category": {
+      "type": "object",
+      "required": ["id"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Category id stored in files[].g. Unique within the config."
+        },
+        "label": {
+          "type": "string",
+          "description": "Legend text; defaults to the id."
+        },
+        "gray": {
+          "type": "boolean",
+          "default": false,
+          "description": "Neutral color (gray slot) instead of a palette slot."
+        },
+        "muted": {
+          "type": "boolean",
+          "default": false,
+          "description": "Hidden by default; the header toggle reveals it (tests, typically)."
+        }
+      }
+    },
+    "rule": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "description": "[path prefix, category id]. End prefixes with '/' so that src/app does not capture src/apple.",
+      "items": [
+        { "type": "string", "minLength": 1, "description": "Path prefix, relative to the target repo root." },
+        { "type": "string", "minLength": 1, "description": "Category id declared in categories." }
+      ]
+    },
+    "entryPoints": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Route parsers to run. Absent or parsers: [] means no parser runs.",
+      "properties": {
+        "parsers": {
+          "type": "array",
+          "default": [],
+          "items": { "$ref": "#/definitions/parserEntry" }
+        }
+      }
+    },
+    "parserEntry": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": true,
+      "description": "One parser invocation. Keys other than name and files are passed to the parser as options; unknown options warn.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Registry name of the parser (pipeline/entry_points/). Unknown names are a hard error listing the available parsers. Currently: django-drf."
+        },
+        "files": {
+          "type": "array",
+          "default": [],
+          "description": "Files the parser scans, relative to the target repo root (joined with prep_extra --repo / build --repo).",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "route_prefix": {
+          "type": "string",
+          "default": "",
+          "pattern": "^(|/[^\\s]*)$",
+          "description": "Prepended to every route label; empty or starting with '/'. A trailing '/' is stripped."
+        },
+        "ignore_views": {
+          "type": "array",
+          "default": [],
+          "description": "A view whose class name contains any of these substrings is skipped.",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

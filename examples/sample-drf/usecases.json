@@ -1,0 +1,158 @@
+[
+  {
+    "name": "Member borrows a copy of a title",
+    "actor": "Library member (at the desk or in the web app)",
+    "goal": "Walk away with a physical copy and a loan that has a due date",
+    "entry_points": [
+      "http: catalog/views.py:BookViewSet — POST /api/books/{id}/borrow"
+    ],
+    "hops": [
+      "catalog/views.py:BookViewSet.borrow — reads the member id and asks for a free copy",
+      "catalog/services/catalog_service.py:CatalogService.first_available_copy — picks the copy to hand over",
+      "lending/services/loan_service.py:LoanService.checkout — the central rule of the flow",
+      "lending/domain/policies.py:is_within_loan_limit — refuses a member who is at their tier limit",
+      "lending/domain/policies.py:due_date_for — sets the due date from the member tier",
+      "catalog/models.py:Copy.mark_lent — takes the copy off the shelf",
+      "lending/models.py:Loan — stores the open loan"
+    ],
+    "async_legs": [],
+    "failure_paths": [
+      "no copy on the shelf -> 409 from the view, before any lending code runs",
+      "suspended card -> lending/services/loan_service.py:MemberSuspended",
+      "tier limit reached -> lending/services/loan_service.py:LoanLimitReached"
+    ],
+    "rules": [
+      "LP-01 max-three-open-loans (basic tier; scholar and staff get more)",
+      "LP-04 suspended-card-cannot-borrow",
+      "LP-08 loan-period-comes-from-the-tier"
+    ],
+    "tests": [
+      "tests/test_lending_flows.py::LoanServiceTests",
+      "tests/test_policies.py::DueDateTests"
+    ],
+    "seam_crossing": true,
+    "status": "human-verified",
+    "notes": "The only flow that starts in the catalog app and ends inside lending; the seam is the LoanService call in the view."
+  },
+  {
+    "name": "Member reserves a title that is fully lent out",
+    "actor": "Library member",
+    "goal": "Hold a place in the queue for the next copy of a title to come back",
+    "entry_points": [
+      "command: lending/handlers/place_reservation.py:PlaceReservationHandler.handle"
+    ],
+    "hops": [
+      "lending/handlers/place_reservation.py:PlaceReservationHandler.handle — owns the reservation decision",
+      "lending/services/loan_service.py:LoanService.get_member — loads the member the request refers to",
+      "catalog/services/catalog_service.py:CatalogService.count_available_copies — refuses while a copy is free",
+      "lending/handlers/place_reservation.py:PlaceReservationHandler.can_place — checks the queue allowance",
+      "lending/domain/policies.py:is_within_reservation_limit — enforces the tier reservation limit",
+      "lending/domain/policies.py:reservation_expiry — decides how long the claim holds",
+      "lending/models.py:Reservation — stores the queued claim"
+    ],
+    "async_legs": [],
+    "failure_paths": [
+      "a copy is still on the shelf -> lending/handlers/place_reservation.py:CopyStillAvailable",
+      "queue allowance used up -> lending/handlers/place_reservation.py:ReservationLimitReached"
+    ],
+    "rules": [
+      "LP-02 max-two-open-reservations (basic tier)",
+      "LP-05 reserve-only-when-no-copy-is-free"
+    ],
+    "tests": [
+      "tests/test_lending_flows.py::PlaceReservationTests"
+    ],
+    "seam_crossing": false,
+    "status": "agent-verified",
+    "notes": "Declared as a command entry point on purpose: the handler is callable without any route, and the HTTP wrapper (BookViewSet.reserve) is only one of its callers."
+  },
+  {
+    "name": "Desk clerk takes a copy back and settles the fine",
+    "actor": "Desk clerk",
+    "goal": "Close the loan, charge whatever is owed and release the copy to the next member in line",
+    "hops": [
+      "lending/handlers/return_book.py:ReturnBookHandler.handle — closes the loan and looks at the queue",
+      "lending/domain/policies.py:days_overdue — measures how late the return is",
+      "lending/domain/policies.py:calculate_fine — turns late days into cents after the grace period",
+      "lending/services/loan_service.py:LoanService.return_copy — settles the loan record",
+      "catalog/models.py:Copy.mark_returned — puts the copy back on the shelf",
+      "lending/models.py:Loan.close — records the return date and the fine",
+      "lending/handlers/return_book.py:ReturnBookHandler.next_in_queue — finds who was waiting",
+      "lending/tasks/notify_overdue.py:deliver_notice — tells that member a copy is waiting"
+    ],
+    "async_legs": [
+      "the notice to the next member is delivered outside the return transaction in a real deployment"
+    ],
+    "failure_paths": [
+      "nobody is waiting -> the reservation leg is skipped and the summary reports reservation_fulfilled false"
+    ],
+    "rules": [
+      "LP-03 grace-period-of-three-days",
+      "LP-06 fine-capped-at-2000-cents",
+      "LP-09 oldest-open-reservation-is-served-first"
+    ],
+    "tests": [
+      "tests/test_policies.py::FineTests"
+    ],
+    "seam_crossing": false,
+    "status": "inferred",
+    "notes": "Deliberately has no entry_points key: the pipeline falls back to the first resolved hop, so this use-case still gets one entry point of kind other."
+  },
+  {
+    "name": "Nightly job chases members with overdue loans",
+    "actor": "Scheduler",
+    "goal": "Send every member holding an overdue copy the notice with the fine accrued so far",
+    "entry_points": [
+      "cron: lending/services/overdue_service.py:OverdueService.notify_all — nightly overdue sweep"
+    ],
+    "hops": [
+      "lending/services/overdue_service.py:OverdueService.notify_all — drives the sweep",
+      "lending/services/overdue_service.py:OverdueService.find_overdue — selects the open loans past their due date",
+      "lending/tasks/notify_overdue.py:notify_batch — walks the batch and counts the notices",
+      "lending/domain/policies.py:days_overdue — measures how late each loan is",
+      "lending/tasks/notify_overdue.py:build_notice — renders the payload with the formatted fine",
+      "lending/tasks/notify_overdue.py:deliver_notice — hands the notice to the delivery channel"
+    ],
+    "async_legs": [
+      "lending/tasks/notify_overdue.py:notify_all_open_loans is the same sweep without a preselected batch"
+    ],
+    "failure_paths": [
+      "a loan still inside the grace period gets a notice with a zero fine"
+    ],
+    "rules": [
+      "LP-03 grace-period-of-three-days",
+      "LP-10 one-notice-per-overdue-loan-per-run"
+    ],
+    "tests": [
+      "tests/test_lending_flows.py::OverdueTests"
+    ],
+    "seam_crossing": false,
+    "status": "hypothesis",
+    "notes": "Nothing in the fixture schedules this; the cron kind records the intent, not an observed trigger."
+  },
+  {
+    "name": "Reader browses titles and sees live availability",
+    "actor": "Anonymous reader",
+    "goal": "Find a title and know whether a copy can be picked up right now",
+    "entry_points": [
+      "http: catalog/views.py:BookViewSet.list — GET /api/books",
+      "http: catalog/views.py:BookViewSet.copies — GET /api/books/{id}/copies"
+    ],
+    "hops": [
+      "catalog/views.py:BookViewSet.list — reads the optional search parameter",
+      "catalog/services/catalog_service.py:CatalogService.list_books — builds the query in one place",
+      "catalog/serializers.py:BookSerializer.get_available_copies — asks the service instead of the ORM",
+      "catalog/services/catalog_service.py:CatalogService.count_available_copies — counts what is lendable",
+      "catalog/models.py:Book.available_copies — filters the copies that are on the shelf"
+    ],
+    "async_legs": [],
+    "failure_paths": [],
+    "rules": [
+      "LP-07 availability-is-counted-from-shelf-copies-only"
+    ],
+    "tests": [],
+    "seam_crossing": false,
+    "status": "agent-verified",
+    "notes": "No test covers this read path in the fixture; the empty tests list is the honest answer rather than a guess."
+  }
+]

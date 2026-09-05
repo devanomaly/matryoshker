@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (python ${{ matrix.python-version }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+        os: [ubuntu-latest, windows-latest]
+    env:
+      # The pipeline is pure stdlib and writes UTF-8 explicitly, but pytest's own
+      # console output (assertion diffs, warnings) can otherwise hit Windows'
+      # default cp1252 codepage on em dashes and accented text from the fixtures.
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install extractor dependencies
+        working-directory: extractor
+        run: npm ci --ignore-scripts
+
+      - name: Install test dependencies
+        run: pip install pytest
+
+      - name: Run the test suite
+        run: python -m pytest -q tests

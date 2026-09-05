@@ -1,0 +1,109 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Matryoshker use-case registry (contract v2)",
+  "description": "Schema for data/<repo>/usecases.json: a JSON array of use-cases. See docs/data-contract.md, sections 4 and 5. v1 Portuguese keys and status values are accepted as aliases. Extra keys (notes, preconditions, documented, ...) are allowed and ignored by the pipeline.",
+  "type": "array",
+  "items": { "$ref": "#/definitions/useCase" },
+  "definitions": {
+    "citation": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "[A-Za-z0-9_/.\\-]+\\.[A-Za-z0-9_]+",
+      "description": "Must contain a file citation path/file.ext[:Symbol]. Hops: \"path/file.ext:Symbol — role\". Entry points: \"[kind: ][label ]path/file.ext[:Symbol][ — text]\" with kind in http|command|event|cli|cron|other (no prefix = other)."
+    },
+    "status": {
+      "type": "string",
+      "default": "inferred",
+      "enum": [
+        "human-verified", "agent-verified", "inferred", "hypothesis", "outdated",
+        "verificado-humano", "verificado-agente", "inferido", "hipotese", "hipótese", "desatualizado"
+      ],
+      "description": "Canonical: human-verified | agent-verified | inferred | hypothesis | outdated. The v1 values verificado-humano, verificado-agente, inferido, hipotese (hipótese), desatualizado map to them. human-verified is only ever set by a human."
+    },
+    "stringList": {
+      "type": "array",
+      "default": [],
+      "items": { "type": "string" }
+    },
+    "useCase": {
+      "type": "object",
+      "additionalProperties": true,
+      "anyOf": [
+        { "required": ["name"] },
+        { "required": ["nome"] }
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique within the file. The viewer keys local status drafts by it."
+        },
+        "nome": {
+          "type": "string",
+          "minLength": 1,
+          "description": "v1 alias of name."
+        },
+        "actor": {
+          "type": "string",
+          "default": "",
+          "description": "Who triggers the use-case."
+        },
+        "ator": {
+          "type": "string",
+          "description": "v1 alias of actor."
+        },
+        "goal": {
+          "type": "string",
+          "default": "",
+          "description": "One sentence: what the actor achieves."
+        },
+        "objetivo": {
+          "type": "string",
+          "description": "v1 alias of goal."
+        },
+        "entry_points": {
+          "type": "array",
+          "default": [],
+          "description": "Entry-point citations (data-contract.md 5.2). Unresolved ones stay as documentation and produce no node.",
+          "items": { "$ref": "#/definitions/citation" }
+        },
+        "hops": {
+          "type": "array",
+          "default": [],
+          "description": "Hop citations in execution order (data-contract.md 5.1). A hop whose file does not resolve is dropped and reported on stderr.",
+          "items": { "$ref": "#/definitions/citation" }
+        },
+        "rules": {
+          "$ref": "#/definitions/stringList",
+          "description": "Business rules the use-case touches (shown in the viewer)."
+        },
+        "regras_envolvidas": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "v1 alias of rules."
+        },
+        "seam_crossing": {
+          "type": "boolean",
+          "default": false,
+          "description": "True when the flow crosses an architectural seam (shown as a badge)."
+        },
+        "status": { "$ref": "#/definitions/status" },
+        "async_legs": {
+          "type": "array",
+          "default": [],
+          "description": "Documentation only; ignored by the pipeline."
+        },
+        "failure_paths": {
+          "type": "array",
+          "default": [],
+          "description": "Documentation only; ignored by the pipeline."
+        },
+        "tests": {
+          "type": "array",
+          "default": [],
+          "description": "Documentation only; ignored by the pipeline."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,7 @@
+# The repo root ignores scan-output.json, im-output.json and es-output.json
+# so that a working run never leaves extraction output lying around. The
+# golden fixtures below are the deliberate exception: they are committed and
+# compared against, so re-include them here.
+!scan-output.json
+!im-output.json
+!es-output.json

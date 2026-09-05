@@ -1,0 +1,15 @@
+{
+  "name": "matryoshker-extractor",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic structural extraction (phase 1), derived from Understand-Anything (MIT). No LLM, no network at runtime.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "extract": "node extract.mjs"
+  },
+  "dependencies": {
+    "@understand-anything/core": "file:vendor/core"
+  }
+}

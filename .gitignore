@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+node_modules/
+ua/
+out/
+site/
+*.local.*
+es-input.json
+im-input.json
+es-output.json
+im-output.json
+scan-output.json
+data.json
+extra.json
+matryoshker*.html
+check.js

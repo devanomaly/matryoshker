@@ -1,0 +1,2683 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 25,
+  "filesSkipped": [],
+  "analysisOutcomes": {
+    "structure": {
+      "succeeded": 25,
+      "failed": 0
+    },
+    "callGraph": {
+      "succeeded": 25,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "results": [
+    {
+      "path": "catalog/__init__.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 1,
+      "nonEmptyLines": 1,
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "catalog/models.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 109,
+      "nonEmptyLines": 82,
+      "classes": [
+        {
+          "name": "Author",
+          "startLine": 20,
+          "endLine": 39,
+          "methods": [
+            "display_name",
+            "title_count",
+            "__str__"
+          ],
+          "properties": []
+        },
+        {
+          "name": "Book",
+          "startLine": 42,
+          "endLine": 70,
+          "methods": [
+            "full_title",
+            "available_copies",
+            "is_available",
+            "__str__"
+          ],
+          "properties": []
+        },
+        {
+          "name": "Copy",
+          "startLine": 73,
+          "endLine": 109,
+          "methods": [
+            "is_available",
+            "mark_lent",
+            "mark_returned",
+            "withdraw",
+            "__str__"
+          ],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "Author",
+          "line": 20,
+          "isDefault": false
+        },
+        {
+          "name": "Book",
+          "line": 42,
+          "isDefault": false
+        },
+        {
+          "name": "Copy",
+          "line": 73,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "display_name",
+          "callee": "\"{0}, {1}\".format",
+          "lineNumber": 32
+        },
+        {
+          "caller": "title_count",
+          "callee": "self.books.count",
+          "lineNumber": 36
+        },
+        {
+          "caller": "__str__",
+          "callee": "self.display_name",
+          "lineNumber": 39
+        },
+        {
+          "caller": "full_title",
+          "callee": "\"{0}: {1}\".format",
+          "lineNumber": 59
+        },
+        {
+          "caller": "available_copies",
+          "callee": "self.copies.filter",
+          "lineNumber": 63
+        },
+        {
+          "caller": "is_available",
+          "callee": "self.available_copies().exists",
+          "lineNumber": 67
+        },
+        {
+          "caller": "is_available",
+          "callee": "self.available_copies",
+          "lineNumber": 67
+        },
+        {
+          "caller": "__str__",
+          "callee": "self.full_title",
+          "lineNumber": 70
+        },
+        {
+          "caller": "mark_lent",
+          "callee": "self.save",
+          "lineNumber": 93
+        },
+        {
+          "caller": "mark_returned",
+          "callee": "self.save",
+          "lineNumber": 99
+        },
+        {
+          "caller": "withdraw",
+          "callee": "self.save",
+          "lineNumber": 105
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 3,
+        "functionCount": 0,
+        "classCount": 3
+      }
+    },
+    {
+      "path": "catalog/serializers.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 52,
+      "nonEmptyLines": 38,
+      "classes": [
+        {
+          "name": "AuthorSerializer",
+          "startLine": 8,
+          "endLine": 19,
+          "methods": [
+            "get_display_name"
+          ],
+          "properties": []
+        },
+        {
+          "name": "CopySerializer",
+          "startLine": 22,
+          "endLine": 27,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "BookSerializer",
+          "startLine": 30,
+          "endLine": 52,
+          "methods": [
+            "get_available_copies"
+          ],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "AuthorSerializer",
+          "line": 8,
+          "isDefault": false
+        },
+        {
+          "name": "CopySerializer",
+          "line": 22,
+          "isDefault": false
+        },
+        {
+          "name": "BookSerializer",
+          "line": 30,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "get_display_name",
+          "callee": "author.display_name",
+          "lineNumber": 19
+        },
+        {
+          "caller": "get_available_copies",
+          "callee": "CatalogService",
+          "lineNumber": 51
+        },
+        {
+          "caller": "get_available_copies",
+          "callee": "service.count_available_copies",
+          "lineNumber": 52
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 3,
+        "functionCount": 0,
+        "classCount": 3
+      }
+    },
+    {
+      "path": "catalog/services/__init__.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 1,
+      "nonEmptyLines": 1,
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "catalog/services/catalog_service.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 47,
+      "nonEmptyLines": 36,
+      "classes": [
+        {
+          "name": "CatalogService",
+          "startLine": 9,
+          "endLine": 47,
+          "methods": [
+            "list_books",
+            "get_book",
+            "list_authors",
+            "available_copies",
+            "count_available_copies",
+            "first_available_copy",
+            "register_copy",
+            "withdraw_copy"
+          ],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "CatalogService",
+          "line": 9,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "list_books",
+          "callee": "Book.objects.select_related",
+          "lineNumber": 14
+        },
+        {
+          "caller": "list_books",
+          "callee": "queryset.filter",
+          "lineNumber": 16
+        },
+        {
+          "caller": "get_book",
+          "callee": "Book.objects.select_related(\"author\").get",
+          "lineNumber": 21
+        },
+        {
+          "caller": "get_book",
+          "callee": "Book.objects.select_related",
+          "lineNumber": 21
+        },
+        {
+          "caller": "list_authors",
+          "callee": "Author.objects.all",
+          "lineNumber": 25
+        },
+        {
+          "caller": "available_copies",
+          "callee": "book.available_copies",
+          "lineNumber": 29
+        },
+        {
+          "caller": "count_available_copies",
+          "callee": "self.available_copies(book).count",
+          "lineNumber": 33
+        },
+        {
+          "caller": "count_available_copies",
+          "callee": "self.available_copies",
+          "lineNumber": 33
+        },
+        {
+          "caller": "first_available_copy",
+          "callee": "self.available_copies(book).first",
+          "lineNumber": 37
+        },
+        {
+          "caller": "first_available_copy",
+          "callee": "self.available_copies",
+          "lineNumber": 37
+        },
+        {
+          "caller": "register_copy",
+          "callee": "Copy.objects.create",
+          "lineNumber": 41
+        },
+        {
+          "caller": "withdraw_copy",
+          "callee": "copy.withdraw",
+          "lineNumber": 47
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "catalog/urls.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 13,
+      "nonEmptyLines": 10,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "catalog/views.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 106,
+      "nonEmptyLines": 85,
+      "classes": [
+        {
+          "name": "BookViewSet",
+          "startLine": 19,
+          "endLine": 70,
+          "methods": [
+            "__init__",
+            "list",
+            "retrieve",
+            "copies",
+            "borrow",
+            "reserve"
+          ],
+          "properties": []
+        },
+        {
+          "name": "AuthorViewSet",
+          "startLine": 73,
+          "endLine": 94,
+          "methods": [
+            "__init__",
+            "list",
+            "retrieve"
+          ],
+          "properties": []
+        },
+        {
+          "name": "HealthView",
+          "startLine": 97,
+          "endLine": 106,
+          "methods": [
+            "get"
+          ],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "BookViewSet",
+          "line": 19,
+          "isDefault": false
+        },
+        {
+          "name": "AuthorViewSet",
+          "line": 73,
+          "isDefault": false
+        },
+        {
+          "name": "HealthView",
+          "line": 97,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "__init__",
+          "callee": "super().__init__",
+          "lineNumber": 25
+        },
+        {
+          "caller": "__init__",
+          "callee": "super",
+          "lineNumber": 25
+        },
+        {
+          "caller": "__init__",
+          "callee": "CatalogService",
+          "lineNumber": 26
+        },
+        {
+          "caller": "__init__",
+          "callee": "LoanService",
+          "lineNumber": 27
+        },
+        {
+          "caller": "__init__",
+          "callee": "PlaceReservationHandler",
+          "lineNumber": 28
+        },
+        {
+          "caller": "list",
+          "callee": "self.catalog.list_books",
+          "lineNumber": 32
+        },
+        {
+          "caller": "list",
+          "callee": "request.query_params.get",
+          "lineNumber": 32
+        },
+        {
+          "caller": "list",
+          "callee": "BookSerializer",
+          "lineNumber": 33
+        },
+        {
+          "caller": "list",
+          "callee": "Response",
+          "lineNumber": 34
+        },
+        {
+          "caller": "retrieve",
+          "callee": "self.catalog.get_book",
+          "lineNumber": 38
+        },
+        {
+          "caller": "retrieve",
+          "callee": "BookSerializer",
+          "lineNumber": 39
+        },
+        {
+          "caller": "retrieve",
+          "callee": "Response",
+          "lineNumber": 40
+        },
+        {
+          "caller": "copies",
+          "callee": "self.catalog.get_book",
+          "lineNumber": 45
+        },
+        {
+          "caller": "copies",
+          "callee": "self.catalog.available_copies",
+          "lineNumber": 46
+        },
+        {
+          "caller": "copies",
+          "callee": "CopySerializer",
+          "lineNumber": 47
+        },
+        {
+          "caller": "copies",
+          "callee": "Response",
+          "lineNumber": 48
+        },
+        {
+          "caller": "borrow",
+          "callee": "self.catalog.get_book",
+          "lineNumber": 53
+        },
+        {
+          "caller": "borrow",
+          "callee": "self.catalog.first_available_copy",
+          "lineNumber": 54
+        },
+        {
+          "caller": "borrow",
+          "callee": "Response",
+          "lineNumber": 56
+        },
+        {
+          "caller": "borrow",
+          "callee": "self.loans.checkout",
+          "lineNumber": 60
+        },
+        {
+          "caller": "borrow",
+          "callee": "request.data.get",
+          "lineNumber": 60
+        },
+        {
+          "caller": "borrow",
+          "callee": "Response",
+          "lineNumber": 61
+        },
+        {
+          "caller": "reserve",
+          "callee": "self.catalog.get_book",
+          "lineNumber": 66
+        },
+        {
+          "caller": "reserve",
+          "callee": "self.reservations.handle",
+          "lineNumber": 67
+        },
+        {
+          "caller": "reserve",
+          "callee": "request.data.get",
+          "lineNumber": 67
+        },
+        {
+          "caller": "reserve",
+          "callee": "Response",
+          "lineNumber": 68
+        },
+        {
+          "caller": "__init__",
+          "callee": "super().__init__",
+          "lineNumber": 79
+        },
+        {
+          "caller": "__init__",
+          "callee": "super",
+          "lineNumber": 79
+        },
+        {
+          "caller": "__init__",
+          "callee": "CatalogService",
+          "lineNumber": 80
+        },
+        {
+          "caller": "list",
+          "callee": "self.catalog.list_authors",
+          "lineNumber": 84
+        },
+        {
+          "caller": "list",
+          "callee": "AuthorSerializer",
+          "lineNumber": 85
+        },
+        {
+          "caller": "list",
+          "callee": "Response",
+          "lineNumber": 86
+        },
+        {
+          "caller": "retrieve",
+          "callee": "self.catalog.list_authors",
+          "lineNumber": 90
+        },
+        {
+          "caller": "retrieve",
+          "callee": "authors.get",
+          "lineNumber": 91
+        },
+        {
+          "caller": "retrieve",
+          "callee": "AuthorSerializer",
+          "lineNumber": 92
+        },
+        {
+          "caller": "retrieve",
+          "callee": "author.title_count",
+          "lineNumber": 93
+        },
+        {
+          "caller": "retrieve",
+          "callee": "Response",
+          "lineNumber": 94
+        },
+        {
+          "caller": "get",
+          "callee": "CatalogService",
+          "lineNumber": 105
+        },
+        {
+          "caller": "get",
+          "callee": "Response",
+          "lineNumber": 106
+        },
+        {
+          "caller": "get",
+          "callee": "catalog.list_books().count",
+          "lineNumber": 106
+        },
+        {
+          "caller": "get",
+          "callee": "catalog.list_books",
+          "lineNumber": 106
+        }
+      ],
+      "metrics": {
+        "importCount": 4,
+        "exportCount": 3,
+        "functionCount": 0,
+        "classCount": 3
+      }
+    },
+    {
+      "path": "lending/__init__.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 5,
+      "nonEmptyLines": 4,
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "lending/domain/__init__.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 1,
+      "nonEmptyLines": 1,
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "lending/domain/policies.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 109,
+      "nonEmptyLines": 78,
+      "functions": [
+        {
+          "name": "loan_limit_for",
+          "startLine": 41,
+          "endLine": 43,
+          "params": [
+            "tier"
+          ]
+        },
+        {
+          "name": "loan_period_days",
+          "startLine": 46,
+          "endLine": 48,
+          "params": [
+            "tier"
+          ]
+        },
+        {
+          "name": "reservation_limit_for",
+          "startLine": 51,
+          "endLine": 53,
+          "params": [
+            "tier"
+          ]
+        },
+        {
+          "name": "is_within_loan_limit",
+          "startLine": 56,
+          "endLine": 58,
+          "params": [
+            "active_loan_count",
+            "tier"
+          ]
+        },
+        {
+          "name": "is_within_reservation_limit",
+          "startLine": 61,
+          "endLine": 63,
+          "params": [
+            "open_reservation_count",
+            "tier"
+          ]
+        },
+        {
+          "name": "due_date_for",
+          "startLine": 66,
+          "endLine": 68,
+          "params": [
+            "checked_out_on",
+            "tier"
+          ]
+        },
+        {
+          "name": "reservation_expiry",
+          "startLine": 71,
+          "endLine": 73,
+          "params": [
+            "placed_on"
+          ]
+        },
+        {
+          "name": "days_overdue",
+          "startLine": 76,
+          "endLine": 80,
+          "params": [
+            "due_date",
+            "today"
+          ]
+        },
+        {
+          "name": "is_overdue",
+          "startLine": 83,
+          "endLine": 85,
+          "params": [
+            "due_date",
+            "today"
+          ]
+        },
+        {
+          "name": "is_fine_due",
+          "startLine": 88,
+          "endLine": 90,
+          "params": [
+            "overdue_days"
+          ]
+        },
+        {
+          "name": "calculate_fine",
+          "startLine": 93,
+          "endLine": 102,
+          "params": [
+            "overdue_days"
+          ]
+        },
+        {
+          "name": "can_renew",
+          "startLine": 105,
+          "endLine": 109,
+          "params": [
+            "renewal_count",
+            "has_reservations"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "loan_limit_for",
+          "line": 41,
+          "isDefault": false
+        },
+        {
+          "name": "loan_period_days",
+          "line": 46,
+          "isDefault": false
+        },
+        {
+          "name": "reservation_limit_for",
+          "line": 51,
+          "isDefault": false
+        },
+        {
+          "name": "is_within_loan_limit",
+          "line": 56,
+          "isDefault": false
+        },
+        {
+          "name": "is_within_reservation_limit",
+          "line": 61,
+          "isDefault": false
+        },
+        {
+          "name": "due_date_for",
+          "line": 66,
+          "isDefault": false
+        },
+        {
+          "name": "reservation_expiry",
+          "line": 71,
+          "isDefault": false
+        },
+        {
+          "name": "days_overdue",
+          "line": 76,
+          "isDefault": false
+        },
+        {
+          "name": "is_overdue",
+          "line": 83,
+          "isDefault": false
+        },
+        {
+          "name": "is_fine_due",
+          "line": 88,
+          "isDefault": false
+        },
+        {
+          "name": "calculate_fine",
+          "line": 93,
+          "isDefault": false
+        },
+        {
+          "name": "can_renew",
+          "line": 105,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "loan_limit_for",
+          "callee": "LOAN_LIMIT_BY_TIER.get",
+          "lineNumber": 43
+        },
+        {
+          "caller": "loan_period_days",
+          "callee": "LOAN_PERIOD_BY_TIER.get",
+          "lineNumber": 48
+        },
+        {
+          "caller": "reservation_limit_for",
+          "callee": "RESERVATION_LIMIT_BY_TIER.get",
+          "lineNumber": 53
+        },
+        {
+          "caller": "is_within_loan_limit",
+          "callee": "loan_limit_for",
+          "lineNumber": 58
+        },
+        {
+          "caller": "is_within_reservation_limit",
+          "callee": "reservation_limit_for",
+          "lineNumber": 63
+        },
+        {
+          "caller": "due_date_for",
+          "callee": "timedelta",
+          "lineNumber": 68
+        },
+        {
+          "caller": "due_date_for",
+          "callee": "loan_period_days",
+          "lineNumber": 68
+        },
+        {
+          "caller": "reservation_expiry",
+          "callee": "timedelta",
+          "lineNumber": 73
+        },
+        {
+          "caller": "is_overdue",
+          "callee": "days_overdue",
+          "lineNumber": 85
+        },
+        {
+          "caller": "calculate_fine",
+          "callee": "is_fine_due",
+          "lineNumber": 99
+        },
+        {
+          "caller": "calculate_fine",
+          "callee": "min",
+          "lineNumber": 102
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 12,
+        "functionCount": 12,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "lending/handlers/__init__.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 5,
+      "nonEmptyLines": 4,
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "lending/handlers/place_reservation.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 63,
+      "nonEmptyLines": 50,
+      "classes": [
+        {
+          "name": "CopyStillAvailable",
+          "startLine": 18,
+          "endLine": 19,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "ReservationLimitReached",
+          "startLine": 22,
+          "endLine": 23,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "PlaceReservationHandler",
+          "startLine": 26,
+          "endLine": 63,
+          "methods": [
+            "__init__",
+            "count_open_reservations",
+            "remaining_slots",
+            "can_place",
+            "handle"
+          ],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "CopyStillAvailable",
+          "line": 18,
+          "isDefault": false
+        },
+        {
+          "name": "ReservationLimitReached",
+          "line": 22,
+          "isDefault": false
+        },
+        {
+          "name": "PlaceReservationHandler",
+          "line": 26,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "__init__",
+          "callee": "CatalogService",
+          "lineNumber": 30
+        },
+        {
+          "caller": "__init__",
+          "callee": "LoanService",
+          "lineNumber": 31
+        },
+        {
+          "caller": "count_open_reservations",
+          "callee": "member.open_reservations().count",
+          "lineNumber": 35
+        },
+        {
+          "caller": "count_open_reservations",
+          "callee": "member.open_reservations",
+          "lineNumber": 35
+        },
+        {
+          "caller": "remaining_slots",
+          "callee": "reservation_limit_for",
+          "lineNumber": 39
+        },
+        {
+          "caller": "remaining_slots",
+          "callee": "self.count_open_reservations",
+          "lineNumber": 39
+        },
+        {
+          "caller": "can_place",
+          "callee": "is_within_reservation_limit",
+          "lineNumber": 45
+        },
+        {
+          "caller": "can_place",
+          "callee": "self.count_open_reservations",
+          "lineNumber": 46
+        },
+        {
+          "caller": "handle",
+          "callee": "date.today",
+          "lineNumber": 51
+        },
+        {
+          "caller": "handle",
+          "callee": "self.loans.get_member",
+          "lineNumber": 52
+        },
+        {
+          "caller": "handle",
+          "callee": "self.catalog.count_available_copies",
+          "lineNumber": 53
+        },
+        {
+          "caller": "handle",
+          "callee": "CopyStillAvailable",
+          "lineNumber": 54
+        },
+        {
+          "caller": "handle",
+          "callee": "self.can_place",
+          "lineNumber": 55
+        },
+        {
+          "caller": "handle",
+          "callee": "ReservationLimitReached",
+          "lineNumber": 56
+        },
+        {
+          "caller": "handle",
+          "callee": "Reservation.objects.create",
+          "lineNumber": 57
+        },
+        {
+          "caller": "handle",
+          "callee": "reservation_expiry",
+          "lineNumber": 61
+        }
+      ],
+      "metrics": {
+        "importCount": 4,
+        "exportCount": 3,
+        "functionCount": 0,
+        "classCount": 3
+      }
+    },
+    {
+      "path": "lending/handlers/return_book.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 52,
+      "nonEmptyLines": 43,
+      "classes": [
+        {
+          "name": "ReturnBookHandler",
+          "startLine": 15,
+          "endLine": 52,
+          "methods": [
+            "__init__",
+            "fine_for",
+            "next_in_queue",
+            "notify_next_member",
+            "handle"
+          ],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "ReturnBookHandler",
+          "line": 15,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "__init__",
+          "callee": "LoanService",
+          "lineNumber": 19
+        },
+        {
+          "caller": "__init__",
+          "callee": "OverdueService",
+          "lineNumber": 20
+        },
+        {
+          "caller": "fine_for",
+          "callee": "date.today",
+          "lineNumber": 24
+        },
+        {
+          "caller": "fine_for",
+          "callee": "calculate_fine",
+          "lineNumber": 25
+        },
+        {
+          "caller": "fine_for",
+          "callee": "days_overdue",
+          "lineNumber": 25
+        },
+        {
+          "caller": "next_in_queue",
+          "callee": "Reservation.objects.filter(\n            book=book, state=RESERVATION_STATE_OPEN\n        ).first",
+          "lineNumber": 29
+        },
+        {
+          "caller": "next_in_queue",
+          "callee": "Reservation.objects.filter",
+          "lineNumber": 29
+        },
+        {
+          "caller": "notify_next_member",
+          "callee": "deliver_notice",
+          "lineNumber": 35
+        },
+        {
+          "caller": "handle",
+          "callee": "date.today",
+          "lineNumber": 41
+        },
+        {
+          "caller": "handle",
+          "callee": "self.fine_for",
+          "lineNumber": 42
+        },
+        {
+          "caller": "handle",
+          "callee": "self.loans.return_copy",
+          "lineNumber": 43
+        },
+        {
+          "caller": "handle",
+          "callee": "self.next_in_queue",
+          "lineNumber": 44
+        },
+        {
+          "caller": "handle",
+          "callee": "self.notify_next_member",
+          "lineNumber": 46
+        },
+        {
+          "caller": "handle",
+          "callee": "reservation.fulfill",
+          "lineNumber": 47
+        }
+      ],
+      "metrics": {
+        "importCount": 5,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "lending/models.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 108,
+      "nonEmptyLines": 82,
+      "classes": [
+        {
+          "name": "Member",
+          "startLine": 21,
+          "endLine": 43,
+          "methods": [
+            "open_loans",
+            "open_reservations",
+            "__str__"
+          ],
+          "properties": []
+        },
+        {
+          "name": "Loan",
+          "startLine": 46,
+          "endLine": 74,
+          "methods": [
+            "is_open",
+            "close",
+            "__str__"
+          ],
+          "properties": []
+        },
+        {
+          "name": "Reservation",
+          "startLine": 77,
+          "endLine": 108,
+          "methods": [
+            "is_open",
+            "fulfill",
+            "expire",
+            "__str__"
+          ],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "Member",
+          "line": 21,
+          "isDefault": false
+        },
+        {
+          "name": "Loan",
+          "line": 46,
+          "isDefault": false
+        },
+        {
+          "name": "Reservation",
+          "line": 77,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "open_loans",
+          "callee": "self.loans.filter",
+          "lineNumber": 36
+        },
+        {
+          "caller": "open_reservations",
+          "callee": "self.reservations.filter",
+          "lineNumber": 40
+        },
+        {
+          "caller": "close",
+          "callee": "self.save",
+          "lineNumber": 70
+        },
+        {
+          "caller": "__str__",
+          "callee": "\"loan #{0}\".format",
+          "lineNumber": 74
+        },
+        {
+          "caller": "fulfill",
+          "callee": "self.save",
+          "lineNumber": 98
+        },
+        {
+          "caller": "expire",
+          "callee": "self.save",
+          "lineNumber": 104
+        },
+        {
+          "caller": "__str__",
+          "callee": "\"reservation #{0}\".format",
+          "lineNumber": 108
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 3,
+        "functionCount": 0,
+        "classCount": 3
+      }
+    },
+    {
+      "path": "lending/services/__init__.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 1,
+      "nonEmptyLines": 1,
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "lending/services/loan_service.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 87,
+      "nonEmptyLines": 71,
+      "classes": [
+        {
+          "name": "LoanLimitReached",
+          "startLine": 20,
+          "endLine": 21,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "MemberSuspended",
+          "startLine": 24,
+          "endLine": 25,
+          "methods": [],
+          "properties": []
+        },
+        {
+          "name": "LoanService",
+          "startLine": 28,
+          "endLine": 87,
+          "methods": [
+            "get_member",
+            "active_loans_for",
+            "count_active_loans",
+            "can_borrow",
+            "checkout",
+            "renew",
+            "outstanding_fine",
+            "return_copy"
+          ],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "LoanLimitReached",
+          "line": 20,
+          "isDefault": false
+        },
+        {
+          "name": "MemberSuspended",
+          "line": 24,
+          "isDefault": false
+        },
+        {
+          "name": "LoanService",
+          "line": 28,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "get_member",
+          "callee": "Member.objects.get",
+          "lineNumber": 33
+        },
+        {
+          "caller": "active_loans_for",
+          "callee": "member.open_loans",
+          "lineNumber": 37
+        },
+        {
+          "caller": "count_active_loans",
+          "callee": "self.active_loans_for(member).count",
+          "lineNumber": 41
+        },
+        {
+          "caller": "count_active_loans",
+          "callee": "self.active_loans_for",
+          "lineNumber": 41
+        },
+        {
+          "caller": "can_borrow",
+          "callee": "is_within_loan_limit",
+          "lineNumber": 47
+        },
+        {
+          "caller": "can_borrow",
+          "callee": "self.count_active_loans",
+          "lineNumber": 47
+        },
+        {
+          "caller": "checkout",
+          "callee": "date.today",
+          "lineNumber": 51
+        },
+        {
+          "caller": "checkout",
+          "callee": "self.get_member",
+          "lineNumber": 52
+        },
+        {
+          "caller": "checkout",
+          "callee": "MemberSuspended",
+          "lineNumber": 54
+        },
+        {
+          "caller": "checkout",
+          "callee": "self.can_borrow",
+          "lineNumber": 55
+        },
+        {
+          "caller": "checkout",
+          "callee": "LoanLimitReached",
+          "lineNumber": 56
+        },
+        {
+          "caller": "checkout",
+          "callee": "copy.mark_lent",
+          "lineNumber": 57
+        },
+        {
+          "caller": "checkout",
+          "callee": "Loan.objects.create",
+          "lineNumber": 58
+        },
+        {
+          "caller": "checkout",
+          "callee": "due_date_for",
+          "lineNumber": 62
+        },
+        {
+          "caller": "renew",
+          "callee": "date.today",
+          "lineNumber": 68
+        },
+        {
+          "caller": "renew",
+          "callee": "loan.copy.book.reservations.filter(state=\"open\").exists",
+          "lineNumber": 69
+        },
+        {
+          "caller": "renew",
+          "callee": "loan.copy.book.reservations.filter",
+          "lineNumber": 69
+        },
+        {
+          "caller": "renew",
+          "callee": "can_renew",
+          "lineNumber": 70
+        },
+        {
+          "caller": "renew",
+          "callee": "timedelta",
+          "lineNumber": 72
+        },
+        {
+          "caller": "renew",
+          "callee": "loan_period_days",
+          "lineNumber": 72
+        },
+        {
+          "caller": "renew",
+          "callee": "loan.save",
+          "lineNumber": 74
+        },
+        {
+          "caller": "outstanding_fine",
+          "callee": "date.today",
+          "lineNumber": 79
+        },
+        {
+          "caller": "outstanding_fine",
+          "callee": "calculate_fine",
+          "lineNumber": 80
+        },
+        {
+          "caller": "outstanding_fine",
+          "callee": "days_overdue",
+          "lineNumber": 80
+        },
+        {
+          "caller": "return_copy",
+          "callee": "date.today",
+          "lineNumber": 84
+        },
+        {
+          "caller": "return_copy",
+          "callee": "self.outstanding_fine",
+          "lineNumber": 85
+        },
+        {
+          "caller": "return_copy",
+          "callee": "loan.copy.mark_returned",
+          "lineNumber": 86
+        },
+        {
+          "caller": "return_copy",
+          "callee": "loan.close",
+          "lineNumber": 87
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 3,
+        "functionCount": 0,
+        "classCount": 3
+      }
+    },
+    {
+      "path": "lending/services/overdue_service.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 43,
+      "nonEmptyLines": 34,
+      "classes": [
+        {
+          "name": "OverdueService",
+          "startLine": 9,
+          "endLine": 43,
+          "methods": [
+            "find_overdue",
+            "fine_for",
+            "is_billable",
+            "notify_one",
+            "notify_all",
+            "total_outstanding_fines"
+          ],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "OverdueService",
+          "line": 9,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "find_overdue",
+          "callee": "date.today",
+          "lineNumber": 14
+        },
+        {
+          "caller": "find_overdue",
+          "callee": "Loan.objects.filter",
+          "lineNumber": 15
+        },
+        {
+          "caller": "fine_for",
+          "callee": "date.today",
+          "lineNumber": 19
+        },
+        {
+          "caller": "fine_for",
+          "callee": "calculate_fine",
+          "lineNumber": 20
+        },
+        {
+          "caller": "fine_for",
+          "callee": "days_overdue",
+          "lineNumber": 20
+        },
+        {
+          "caller": "is_billable",
+          "callee": "date.today",
+          "lineNumber": 24
+        },
+        {
+          "caller": "is_billable",
+          "callee": "is_fine_due",
+          "lineNumber": 25
+        },
+        {
+          "caller": "is_billable",
+          "callee": "days_overdue",
+          "lineNumber": 25
+        },
+        {
+          "caller": "notify_one",
+          "callee": "notify_overdue_member",
+          "lineNumber": 29
+        },
+        {
+          "caller": "notify_all",
+          "callee": "date.today",
+          "lineNumber": 33
+        },
+        {
+          "caller": "notify_all",
+          "callee": "self.find_overdue",
+          "lineNumber": 34
+        },
+        {
+          "caller": "notify_all",
+          "callee": "notify_batch",
+          "lineNumber": 35
+        },
+        {
+          "caller": "total_outstanding_fines",
+          "callee": "date.today",
+          "lineNumber": 39
+        },
+        {
+          "caller": "total_outstanding_fines",
+          "callee": "self.find_overdue",
+          "lineNumber": 41
+        },
+        {
+          "caller": "total_outstanding_fines",
+          "callee": "self.fine_for",
+          "lineNumber": 42
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "lending/tasks/__init__.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 1,
+      "nonEmptyLines": 1,
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "lending/tasks/notify_overdue.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 66,
+      "nonEmptyLines": 49,
+      "functions": [
+        {
+          "name": "format_amount",
+          "startLine": 12,
+          "endLine": 14,
+          "params": [
+            "cents"
+          ]
+        },
+        {
+          "name": "build_notice",
+          "startLine": 17,
+          "endLine": 28,
+          "params": [
+            "loan",
+            "today"
+          ]
+        },
+        {
+          "name": "notify_overdue_member",
+          "startLine": 31,
+          "endLine": 35,
+          "params": [
+            "loan",
+            "today"
+          ]
+        },
+        {
+          "name": "deliver_notice",
+          "startLine": 38,
+          "endLine": 44,
+          "params": [
+            "notice"
+          ]
+        },
+        {
+          "name": "notify_member_of_suspension",
+          "startLine": 47,
+          "endLine": 50,
+          "params": [
+            "member_id"
+          ]
+        },
+        {
+          "name": "notify_batch",
+          "startLine": 53,
+          "endLine": 59,
+          "params": [
+            "loans",
+            "today"
+          ]
+        },
+        {
+          "name": "notify_all_open_loans",
+          "startLine": 62,
+          "endLine": 66,
+          "params": [
+            "today"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "format_amount",
+          "line": 12,
+          "isDefault": false
+        },
+        {
+          "name": "build_notice",
+          "line": 17,
+          "isDefault": false
+        },
+        {
+          "name": "notify_overdue_member",
+          "line": 31,
+          "isDefault": false
+        },
+        {
+          "name": "deliver_notice",
+          "line": 38,
+          "isDefault": false
+        },
+        {
+          "name": "notify_member_of_suspension",
+          "line": 47,
+          "isDefault": false
+        },
+        {
+          "name": "notify_batch",
+          "line": 53,
+          "isDefault": false
+        },
+        {
+          "name": "notify_all_open_loans",
+          "line": 62,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "format_amount",
+          "callee": "\"{0}.{1:02d}\".format",
+          "lineNumber": 14
+        },
+        {
+          "caller": "build_notice",
+          "callee": "date.today",
+          "lineNumber": 19
+        },
+        {
+          "caller": "build_notice",
+          "callee": "days_overdue",
+          "lineNumber": 20
+        },
+        {
+          "caller": "build_notice",
+          "callee": "calculate_fine",
+          "lineNumber": 21
+        },
+        {
+          "caller": "build_notice",
+          "callee": "loan.copy.book.full_title",
+          "lineNumber": 25
+        },
+        {
+          "caller": "build_notice",
+          "callee": "format_amount",
+          "lineNumber": 27
+        },
+        {
+          "caller": "notify_overdue_member",
+          "callee": "build_notice",
+          "lineNumber": 33
+        },
+        {
+          "caller": "notify_overdue_member",
+          "callee": "deliver_notice",
+          "lineNumber": 34
+        },
+        {
+          "caller": "notify_member_of_suspension",
+          "callee": "Member.objects.get",
+          "lineNumber": 49
+        },
+        {
+          "caller": "notify_member_of_suspension",
+          "callee": "deliver_notice",
+          "lineNumber": 50
+        },
+        {
+          "caller": "notify_batch",
+          "callee": "notify_overdue_member",
+          "lineNumber": 57
+        },
+        {
+          "caller": "notify_all_open_loans",
+          "callee": "date.today",
+          "lineNumber": 64
+        },
+        {
+          "caller": "notify_all_open_loans",
+          "callee": "Loan.objects.filter",
+          "lineNumber": 65
+        },
+        {
+          "caller": "notify_all_open_loans",
+          "callee": "notify_batch",
+          "lineNumber": 66
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 7,
+        "functionCount": 7,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "library/__init__.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 1,
+      "nonEmptyLines": 1,
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "library/settings.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 46,
+      "nonEmptyLines": 36,
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "library/urls.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 37,
+      "nonEmptyLines": 27,
+      "classes": [
+        {
+          "name": "SchemaView",
+          "startLine": 15,
+          "endLine": 30,
+          "methods": [
+            "as_view",
+            "get"
+          ],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "SchemaView",
+          "line": 15,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "manage.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 20,
+      "nonEmptyLines": 14,
+      "functions": [
+        {
+          "name": "main",
+          "startLine": 11,
+          "endLine": 16,
+          "params": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "main",
+          "line": 11,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "main",
+          "callee": "os.environ.setdefault",
+          "lineNumber": 13
+        },
+        {
+          "caller": "main",
+          "callee": "execute_from_command_line",
+          "lineNumber": 16
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "tests/test_lending_flows.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 158,
+      "nonEmptyLines": 112,
+      "classes": [
+        {
+          "name": "FakeQuery",
+          "startLine": 21,
+          "endLine": 31,
+          "methods": [
+            "count",
+            "first",
+            "exists"
+          ],
+          "properties": []
+        },
+        {
+          "name": "FakeMember",
+          "startLine": 34,
+          "endLine": 50,
+          "methods": [
+            "__init__",
+            "open_loans",
+            "open_reservations"
+          ],
+          "properties": []
+        },
+        {
+          "name": "FakeBook",
+          "startLine": 53,
+          "endLine": 61,
+          "methods": [
+            "__init__",
+            "full_title"
+          ],
+          "properties": []
+        },
+        {
+          "name": "FakeCatalog",
+          "startLine": 64,
+          "endLine": 68,
+          "methods": [
+            "count_available_copies"
+          ],
+          "properties": []
+        },
+        {
+          "name": "FakeLoans",
+          "startLine": 71,
+          "endLine": 78,
+          "methods": [
+            "__init__",
+            "get_member"
+          ],
+          "properties": []
+        },
+        {
+          "name": "PlaceReservationTests",
+          "startLine": 81,
+          "endLine": 100,
+          "methods": [
+            "test_limit_is_reported_from_the_tier",
+            "test_suspended_member_cannot_reserve",
+            "test_reservation_limit_error_is_available"
+          ],
+          "properties": []
+        },
+        {
+          "name": "LoanServiceTests",
+          "startLine": 103,
+          "endLine": 116,
+          "methods": [
+            "test_member_within_limit_can_borrow",
+            "test_member_at_limit_cannot_borrow",
+            "test_suspended_member_cannot_borrow"
+          ],
+          "properties": []
+        },
+        {
+          "name": "OverdueTests",
+          "startLine": 119,
+          "endLine": 137,
+          "methods": [
+            "test_fine_for_matches_the_policy",
+            "test_notice_carries_the_formatted_fine",
+            "test_format_amount_pads_the_cents"
+          ],
+          "properties": []
+        },
+        {
+          "name": "FakeCopy",
+          "startLine": 140,
+          "endLine": 144,
+          "methods": [
+            "__init__"
+          ],
+          "properties": []
+        },
+        {
+          "name": "FakeLoan",
+          "startLine": 147,
+          "endLine": 154,
+          "methods": [
+            "__init__"
+          ],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "FakeQuery",
+          "line": 21,
+          "isDefault": false
+        },
+        {
+          "name": "FakeMember",
+          "line": 34,
+          "isDefault": false
+        },
+        {
+          "name": "FakeBook",
+          "line": 53,
+          "isDefault": false
+        },
+        {
+          "name": "FakeCatalog",
+          "line": 64,
+          "isDefault": false
+        },
+        {
+          "name": "FakeLoans",
+          "line": 71,
+          "isDefault": false
+        },
+        {
+          "name": "PlaceReservationTests",
+          "line": 81,
+          "isDefault": false
+        },
+        {
+          "name": "LoanServiceTests",
+          "line": 103,
+          "isDefault": false
+        },
+        {
+          "name": "OverdueTests",
+          "line": 119,
+          "isDefault": false
+        },
+        {
+          "name": "FakeCopy",
+          "line": 140,
+          "isDefault": false
+        },
+        {
+          "name": "FakeLoan",
+          "line": 147,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "count",
+          "callee": "len",
+          "lineNumber": 25
+        },
+        {
+          "caller": "exists",
+          "callee": "bool",
+          "lineNumber": 31
+        },
+        {
+          "caller": "__init__",
+          "callee": "FakeQuery",
+          "lineNumber": 43
+        },
+        {
+          "caller": "__init__",
+          "callee": "object",
+          "lineNumber": 43
+        },
+        {
+          "caller": "__init__",
+          "callee": "FakeQuery",
+          "lineNumber": 44
+        },
+        {
+          "caller": "__init__",
+          "callee": "object",
+          "lineNumber": 44
+        },
+        {
+          "caller": "test_limit_is_reported_from_the_tier",
+          "callee": "FakeMember",
+          "lineNumber": 85
+        },
+        {
+          "caller": "test_limit_is_reported_from_the_tier",
+          "callee": "PlaceReservationHandler",
+          "lineNumber": 86
+        },
+        {
+          "caller": "test_limit_is_reported_from_the_tier",
+          "callee": "FakeCatalog",
+          "lineNumber": 87
+        },
+        {
+          "caller": "test_limit_is_reported_from_the_tier",
+          "callee": "FakeLoans",
+          "lineNumber": 87
+        },
+        {
+          "caller": "test_limit_is_reported_from_the_tier",
+          "callee": "self.assertFalse",
+          "lineNumber": 89
+        },
+        {
+          "caller": "test_limit_is_reported_from_the_tier",
+          "callee": "handler.can_place",
+          "lineNumber": 89
+        },
+        {
+          "caller": "test_limit_is_reported_from_the_tier",
+          "callee": "self.assertEqual",
+          "lineNumber": 90
+        },
+        {
+          "caller": "test_limit_is_reported_from_the_tier",
+          "callee": "handler.remaining_slots",
+          "lineNumber": 90
+        },
+        {
+          "caller": "test_suspended_member_cannot_reserve",
+          "callee": "FakeMember",
+          "lineNumber": 93
+        },
+        {
+          "caller": "test_suspended_member_cannot_reserve",
+          "callee": "PlaceReservationHandler",
+          "lineNumber": 94
+        },
+        {
+          "caller": "test_suspended_member_cannot_reserve",
+          "callee": "FakeCatalog",
+          "lineNumber": 95
+        },
+        {
+          "caller": "test_suspended_member_cannot_reserve",
+          "callee": "FakeLoans",
+          "lineNumber": 95
+        },
+        {
+          "caller": "test_suspended_member_cannot_reserve",
+          "callee": "self.assertFalse",
+          "lineNumber": 97
+        },
+        {
+          "caller": "test_suspended_member_cannot_reserve",
+          "callee": "handler.can_place",
+          "lineNumber": 97
+        },
+        {
+          "caller": "test_reservation_limit_error_is_available",
+          "callee": "self.assertTrue",
+          "lineNumber": 100
+        },
+        {
+          "caller": "test_reservation_limit_error_is_available",
+          "callee": "issubclass",
+          "lineNumber": 100
+        },
+        {
+          "caller": "test_member_within_limit_can_borrow",
+          "callee": "LoanService",
+          "lineNumber": 107
+        },
+        {
+          "caller": "test_member_within_limit_can_borrow",
+          "callee": "self.assertTrue",
+          "lineNumber": 108
+        },
+        {
+          "caller": "test_member_within_limit_can_borrow",
+          "callee": "service.can_borrow",
+          "lineNumber": 108
+        },
+        {
+          "caller": "test_member_within_limit_can_borrow",
+          "callee": "FakeMember",
+          "lineNumber": 108
+        },
+        {
+          "caller": "test_member_at_limit_cannot_borrow",
+          "callee": "LoanService",
+          "lineNumber": 111
+        },
+        {
+          "caller": "test_member_at_limit_cannot_borrow",
+          "callee": "self.assertFalse",
+          "lineNumber": 112
+        },
+        {
+          "caller": "test_member_at_limit_cannot_borrow",
+          "callee": "service.can_borrow",
+          "lineNumber": 112
+        },
+        {
+          "caller": "test_member_at_limit_cannot_borrow",
+          "callee": "FakeMember",
+          "lineNumber": 112
+        },
+        {
+          "caller": "test_suspended_member_cannot_borrow",
+          "callee": "LoanService",
+          "lineNumber": 115
+        },
+        {
+          "caller": "test_suspended_member_cannot_borrow",
+          "callee": "self.assertFalse",
+          "lineNumber": 116
+        },
+        {
+          "caller": "test_suspended_member_cannot_borrow",
+          "callee": "service.can_borrow",
+          "lineNumber": 116
+        },
+        {
+          "caller": "test_suspended_member_cannot_borrow",
+          "callee": "FakeMember",
+          "lineNumber": 116
+        },
+        {
+          "caller": "test_fine_for_matches_the_policy",
+          "callee": "OverdueService",
+          "lineNumber": 123
+        },
+        {
+          "caller": "test_fine_for_matches_the_policy",
+          "callee": "FakeLoan",
+          "lineNumber": 124
+        },
+        {
+          "caller": "test_fine_for_matches_the_policy",
+          "callee": "date",
+          "lineNumber": 124
+        },
+        {
+          "caller": "test_fine_for_matches_the_policy",
+          "callee": "self.assertEqual",
+          "lineNumber": 125
+        },
+        {
+          "caller": "test_fine_for_matches_the_policy",
+          "callee": "service.fine_for",
+          "lineNumber": 126
+        },
+        {
+          "caller": "test_fine_for_matches_the_policy",
+          "callee": "date",
+          "lineNumber": 126
+        },
+        {
+          "caller": "test_fine_for_matches_the_policy",
+          "callee": "calculate_fine",
+          "lineNumber": 126
+        },
+        {
+          "caller": "test_notice_carries_the_formatted_fine",
+          "callee": "FakeLoan",
+          "lineNumber": 130
+        },
+        {
+          "caller": "test_notice_carries_the_formatted_fine",
+          "callee": "date",
+          "lineNumber": 130
+        },
+        {
+          "caller": "test_notice_carries_the_formatted_fine",
+          "callee": "build_notice",
+          "lineNumber": 131
+        },
+        {
+          "caller": "test_notice_carries_the_formatted_fine",
+          "callee": "date",
+          "lineNumber": 131
+        },
+        {
+          "caller": "test_notice_carries_the_formatted_fine",
+          "callee": "self.assertEqual",
+          "lineNumber": 132
+        },
+        {
+          "caller": "test_notice_carries_the_formatted_fine",
+          "callee": "self.assertEqual",
+          "lineNumber": 133
+        },
+        {
+          "caller": "test_notice_carries_the_formatted_fine",
+          "callee": "format_amount",
+          "lineNumber": 133
+        },
+        {
+          "caller": "test_notice_carries_the_formatted_fine",
+          "callee": "calculate_fine",
+          "lineNumber": 133
+        },
+        {
+          "caller": "test_format_amount_pads_the_cents",
+          "callee": "self.assertEqual",
+          "lineNumber": 136
+        },
+        {
+          "caller": "test_format_amount_pads_the_cents",
+          "callee": "format_amount",
+          "lineNumber": 136
+        },
+        {
+          "caller": "test_format_amount_pads_the_cents",
+          "callee": "self.assertEqual",
+          "lineNumber": 137
+        },
+        {
+          "caller": "test_format_amount_pads_the_cents",
+          "callee": "format_amount",
+          "lineNumber": 137
+        },
+        {
+          "caller": "__init__",
+          "callee": "FakeMember",
+          "lineNumber": 153
+        },
+        {
+          "caller": "__init__",
+          "callee": "FakeCopy",
+          "lineNumber": 154
+        },
+        {
+          "caller": "__init__",
+          "callee": "FakeBook",
+          "lineNumber": 154
+        }
+      ],
+      "metrics": {
+        "importCount": 5,
+        "exportCount": 10,
+        "functionCount": 0,
+        "classCount": 10
+      }
+    },
+    {
+      "path": "tests/test_policies.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 95,
+      "nonEmptyLines": 71,
+      "classes": [
+        {
+          "name": "LoanLimitTests",
+          "startLine": 26,
+          "endLine": 39,
+          "methods": [
+            "test_known_tiers_have_distinct_limits",
+            "test_unknown_tier_falls_back_to_basic",
+            "test_limit_is_exclusive"
+          ],
+          "properties": []
+        },
+        {
+          "name": "DueDateTests",
+          "startLine": 42,
+          "endLine": 64,
+          "methods": [
+            "test_due_date_uses_the_tier_period",
+            "test_days_overdue_is_never_negative",
+            "test_is_overdue_matches_days_overdue",
+            "test_reservation_expiry_is_after_placement"
+          ],
+          "properties": []
+        },
+        {
+          "name": "FineTests",
+          "startLine": 67,
+          "endLine": 79,
+          "methods": [
+            "test_grace_period_is_free",
+            "test_fine_starts_after_the_grace_period",
+            "test_fine_is_capped"
+          ],
+          "properties": []
+        },
+        {
+          "name": "RenewalTests",
+          "startLine": 82,
+          "endLine": 91,
+          "methods": [
+            "test_renewal_blocked_by_a_waiting_queue",
+            "test_renewal_allowed_until_the_cap"
+          ],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "LoanLimitTests",
+          "line": 26,
+          "isDefault": false
+        },
+        {
+          "name": "DueDateTests",
+          "line": 42,
+          "isDefault": false
+        },
+        {
+          "name": "FineTests",
+          "line": 67,
+          "isDefault": false
+        },
+        {
+          "name": "RenewalTests",
+          "line": 82,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "test_known_tiers_have_distinct_limits",
+          "callee": "self.assertEqual",
+          "lineNumber": 30
+        },
+        {
+          "caller": "test_known_tiers_have_distinct_limits",
+          "callee": "loan_limit_for",
+          "lineNumber": 30
+        },
+        {
+          "caller": "test_known_tiers_have_distinct_limits",
+          "callee": "self.assertEqual",
+          "lineNumber": 31
+        },
+        {
+          "caller": "test_known_tiers_have_distinct_limits",
+          "callee": "loan_limit_for",
+          "lineNumber": 31
+        },
+        {
+          "caller": "test_known_tiers_have_distinct_limits",
+          "callee": "self.assertEqual",
+          "lineNumber": 32
+        },
+        {
+          "caller": "test_known_tiers_have_distinct_limits",
+          "callee": "loan_limit_for",
+          "lineNumber": 32
+        },
+        {
+          "caller": "test_unknown_tier_falls_back_to_basic",
+          "callee": "self.assertEqual",
+          "lineNumber": 35
+        },
+        {
+          "caller": "test_unknown_tier_falls_back_to_basic",
+          "callee": "loan_limit_for",
+          "lineNumber": 35
+        },
+        {
+          "caller": "test_unknown_tier_falls_back_to_basic",
+          "callee": "loan_limit_for",
+          "lineNumber": 35
+        },
+        {
+          "caller": "test_limit_is_exclusive",
+          "callee": "self.assertTrue",
+          "lineNumber": 38
+        },
+        {
+          "caller": "test_limit_is_exclusive",
+          "callee": "is_within_loan_limit",
+          "lineNumber": 38
+        },
+        {
+          "caller": "test_limit_is_exclusive",
+          "callee": "self.assertFalse",
+          "lineNumber": 39
+        },
+        {
+          "caller": "test_limit_is_exclusive",
+          "callee": "is_within_loan_limit",
+          "lineNumber": 39
+        },
+        {
+          "caller": "test_due_date_uses_the_tier_period",
+          "callee": "date",
+          "lineNumber": 46
+        },
+        {
+          "caller": "test_due_date_uses_the_tier_period",
+          "callee": "self.assertEqual",
+          "lineNumber": 47
+        },
+        {
+          "caller": "test_due_date_uses_the_tier_period",
+          "callee": "due_date_for(start, TIER_BASIC).toordinal",
+          "lineNumber": 48
+        },
+        {
+          "caller": "test_due_date_uses_the_tier_period",
+          "callee": "due_date_for",
+          "lineNumber": 48
+        },
+        {
+          "caller": "test_due_date_uses_the_tier_period",
+          "callee": "start.toordinal",
+          "lineNumber": 48
+        },
+        {
+          "caller": "test_due_date_uses_the_tier_period",
+          "callee": "loan_period_days",
+          "lineNumber": 49
+        },
+        {
+          "caller": "test_days_overdue_is_never_negative",
+          "callee": "date",
+          "lineNumber": 53
+        },
+        {
+          "caller": "test_days_overdue_is_never_negative",
+          "callee": "self.assertEqual",
+          "lineNumber": 54
+        },
+        {
+          "caller": "test_days_overdue_is_never_negative",
+          "callee": "days_overdue",
+          "lineNumber": 54
+        },
+        {
+          "caller": "test_days_overdue_is_never_negative",
+          "callee": "date",
+          "lineNumber": 54
+        },
+        {
+          "caller": "test_days_overdue_is_never_negative",
+          "callee": "self.assertEqual",
+          "lineNumber": 55
+        },
+        {
+          "caller": "test_days_overdue_is_never_negative",
+          "callee": "days_overdue",
+          "lineNumber": 55
+        },
+        {
+          "caller": "test_days_overdue_is_never_negative",
+          "callee": "date",
+          "lineNumber": 55
+        },
+        {
+          "caller": "test_is_overdue_matches_days_overdue",
+          "callee": "date",
+          "lineNumber": 58
+        },
+        {
+          "caller": "test_is_overdue_matches_days_overdue",
+          "callee": "self.assertFalse",
+          "lineNumber": 59
+        },
+        {
+          "caller": "test_is_overdue_matches_days_overdue",
+          "callee": "is_overdue",
+          "lineNumber": 59
+        },
+        {
+          "caller": "test_is_overdue_matches_days_overdue",
+          "callee": "self.assertTrue",
+          "lineNumber": 60
+        },
+        {
+          "caller": "test_is_overdue_matches_days_overdue",
+          "callee": "is_overdue",
+          "lineNumber": 60
+        },
+        {
+          "caller": "test_is_overdue_matches_days_overdue",
+          "callee": "date",
+          "lineNumber": 60
+        },
+        {
+          "caller": "test_reservation_expiry_is_after_placement",
+          "callee": "date",
+          "lineNumber": 63
+        },
+        {
+          "caller": "test_reservation_expiry_is_after_placement",
+          "callee": "self.assertGreater",
+          "lineNumber": 64
+        },
+        {
+          "caller": "test_reservation_expiry_is_after_placement",
+          "callee": "reservation_expiry",
+          "lineNumber": 64
+        },
+        {
+          "caller": "test_grace_period_is_free",
+          "callee": "self.assertFalse",
+          "lineNumber": 71
+        },
+        {
+          "caller": "test_grace_period_is_free",
+          "callee": "is_fine_due",
+          "lineNumber": 71
+        },
+        {
+          "caller": "test_grace_period_is_free",
+          "callee": "self.assertEqual",
+          "lineNumber": 72
+        },
+        {
+          "caller": "test_grace_period_is_free",
+          "callee": "calculate_fine",
+          "lineNumber": 72
+        },
+        {
+          "caller": "test_fine_starts_after_the_grace_period",
+          "callee": "self.assertTrue",
+          "lineNumber": 75
+        },
+        {
+          "caller": "test_fine_starts_after_the_grace_period",
+          "callee": "is_fine_due",
+          "lineNumber": 75
+        },
+        {
+          "caller": "test_fine_starts_after_the_grace_period",
+          "callee": "self.assertEqual",
+          "lineNumber": 76
+        },
+        {
+          "caller": "test_fine_starts_after_the_grace_period",
+          "callee": "calculate_fine",
+          "lineNumber": 76
+        },
+        {
+          "caller": "test_fine_is_capped",
+          "callee": "self.assertEqual",
+          "lineNumber": 79
+        },
+        {
+          "caller": "test_fine_is_capped",
+          "callee": "calculate_fine",
+          "lineNumber": 79
+        },
+        {
+          "caller": "test_fine_is_capped",
+          "callee": "calculate_fine",
+          "lineNumber": 79
+        },
+        {
+          "caller": "test_renewal_blocked_by_a_waiting_queue",
+          "callee": "self.assertFalse",
+          "lineNumber": 86
+        },
+        {
+          "caller": "test_renewal_blocked_by_a_waiting_queue",
+          "callee": "can_renew",
+          "lineNumber": 86
+        },
+        {
+          "caller": "test_renewal_allowed_until_the_cap",
+          "callee": "self.assertTrue",
+          "lineNumber": 89
+        },
+        {
+          "caller": "test_renewal_allowed_until_the_cap",
+          "callee": "can_renew",
+          "lineNumber": 89
+        },
+        {
+          "caller": "test_renewal_allowed_until_the_cap",
+          "callee": "self.assertTrue",
+          "lineNumber": 90
+        },
+        {
+          "caller": "test_renewal_allowed_until_the_cap",
+          "callee": "can_renew",
+          "lineNumber": 90
+        },
+        {
+          "caller": "test_renewal_allowed_until_the_cap",
+          "callee": "self.assertFalse",
+          "lineNumber": 91
+        },
+        {
+          "caller": "test_renewal_allowed_until_the_cap",
+          "callee": "can_renew",
+          "lineNumber": 91
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 4,
+        "functionCount": 0,
+        "classCount": 4
+      }
+    }
+  ]
+}

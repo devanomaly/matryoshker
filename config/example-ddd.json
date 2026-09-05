@@ -1,0 +1,35 @@
+{
+  "$schema": "../schemas/config.schema.json",
+  "repo": "sample-drf",
+  "commit": "0000000",
+  "date": "2026-09-05",
+  "lang": "en",
+  "categories": [
+    { "id": "views", "label": "Views & routes" },
+    { "id": "serializers", "label": "Serializers" },
+    { "id": "handlers", "label": "Handlers" },
+    { "id": "services", "label": "Services" },
+    { "id": "domain", "label": "Domain rules" },
+    { "id": "models", "label": "Models" },
+    { "id": "tasks", "label": "Background jobs", "gray": true },
+    { "id": "other", "label": "Other", "gray": true },
+    { "id": "tests", "label": "Tests", "gray": true, "muted": true }
+  ],
+  "rules": [
+    ["catalog/views.py", "views"],
+    ["catalog/urls.py", "views"],
+    ["library/urls.py", "views"],
+    ["catalog/serializers.py", "serializers"],
+    ["lending/handlers/", "handlers"],
+    ["catalog/services/", "services"],
+    ["lending/services/", "services"],
+    ["lending/domain/", "domain"],
+    ["lending/tasks/", "tasks"],
+    ["catalog/models.py", "models"],
+    ["lending/models.py", "models"]
+  ],
+  "fallback_category": "other",
+  "test_path_marker": "tests/",
+  "test_category": "tests",
+  "hop_path_prefixes": []
+}

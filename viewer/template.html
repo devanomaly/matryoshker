@@ -1,0 +1,1385 @@
+<title>Matryoshker</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* ---------- theme tokens: light / dark via media query / dark via toggle ---------- */
+  :root{
+    --paper:#F4F6F5; --panel:#FFFFFF; --panel-2:#EBEFED; --ink:#1C2422; --ink-2:#4A5652; --ink-3:#75817C;
+    --line:#D5DCD9; --accent:#2E7D6E; --accent-ink:#1F5A4F; --accent-soft:#DDEBE7;
+    --flow:#4a3aa7; --flow-contrast:#FFFFFF;
+    --slot1:#2a78d6; --slot2:#eb6834; --slot3:#1baf7a; --slot4:#eda100;
+    --slot5:#e87ba4; --slot6:#008300; --gray1:#8a958f; --gray2:#b5beba;
+    --ok:#2E7D32; --ok-soft:#E1EFE2; --warn:#9A5B00; --warn-soft:#F5E9D7; --crit:#B3362B; --crit-soft:#F6E2E0;
+    --ring:rgba(11,11,11,.18); --dim:.14; --shadow:0 4px 16px rgba(28,36,34,.12);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#141A18; --panel:#1B2320; --panel-2:#222B28; --ink:#E7ECE9; --ink-2:#AEBBB5; --ink-3:#7E8B86;
+      --line:#2E3936; --accent:#5BC2AB; --accent-ink:#8AD6C4; --accent-soft:#1F3530;
+      --flow:#9085e9; --flow-contrast:#141A18;
+      --slot1:#3987e5; --slot2:#d95926; --slot3:#199e70; --slot4:#c98500;
+      --slot5:#d55181; --slot6:#008300; --gray1:#6c7873; --gray2:#3a4441;
+      --ok:#7FC783; --ok-soft:#1E3220; --warn:#E0A458; --warn-soft:#37290F; --crit:#E28B82; --crit-soft:#3B1F1C;
+      --ring:rgba(255,255,255,.16); --dim:.14; --shadow:0 4px 16px rgba(0,0,0,.4);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#141A18; --panel:#1B2320; --panel-2:#222B28; --ink:#E7ECE9; --ink-2:#AEBBB5; --ink-3:#7E8B86;
+    --line:#2E3936; --accent:#5BC2AB; --accent-ink:#8AD6C4; --accent-soft:#1F3530;
+    --flow:#9085e9; --flow-contrast:#141A18;
+    --slot1:#3987e5; --slot2:#d95926; --slot3:#199e70; --slot4:#c98500;
+    --slot5:#d55181; --slot6:#008300; --gray1:#6c7873; --gray2:#3a4441;
+    --ok:#7FC783; --ok-soft:#1E3220; --warn:#E0A458; --warn-soft:#37290F; --crit:#E28B82; --crit-soft:#3B1F1C;
+    --ring:rgba(255,255,255,.16); --dim:.14; --shadow:0 4px 16px rgba(0,0,0,.4);
+  }
+
+  /* ---------- base ---------- */
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0; background:var(--paper); color:var(--ink);
+       font-family:"Atkinson Hyperlegible",system-ui,sans-serif; font-size:14.5px; line-height:1.5;
+       display:flex; flex-direction:column; overflow:hidden;}
+  button{font:inherit; color:inherit; background:none; border:none; cursor:pointer}
+  button:focus-visible,input:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+
+  /* ---------- header: title, search, legend, toggles ---------- */
+  header{display:flex; align-items:center; gap:14px; padding:8px 16px; border-bottom:1px solid var(--line);
+         background:var(--panel); flex-wrap:wrap; z-index:5;}
+  header h1{font-family:"Bricolage Grotesque",sans-serif; font-size:1.25rem; font-weight:700; margin:0;}
+  header .commit{font-family:"IBM Plex Mono",monospace; font-size:.7rem; color:var(--ink-3);}
+  #search{flex:1 1 180px; max-width:340px; background:var(--panel-2); border:1px solid var(--line);
+          border-radius:8px; padding:6px 12px; color:var(--ink); font-family:"IBM Plex Mono",monospace; font-size:.78rem;}
+  .legend{display:flex; gap:10px; flex-wrap:wrap; align-items:center; font-size:.72rem; color:var(--ink-2);}
+  .legend .chip{display:inline-flex; align-items:center; gap:5px;}
+  .legend .sw{width:10px; height:10px; border-radius:3px; box-shadow:inset 0 0 0 1px var(--ring);}
+  label.tgl{display:inline-flex; align-items:center; gap:6px; font-size:.75rem; color:var(--ink-2); cursor:pointer;}
+
+  /* ---------- structure: grid of the three panels ---------- */
+  #app{flex:1; display:grid; grid-template-columns:minmax(180px,270px) minmax(0,1fr) minmax(230px,330px); min-height:0;}
+  aside{background:var(--panel); overflow-y:auto; min-height:0;}
+  #sidebar{border-right:1px solid var(--line);}
+  #detail{border-left:1px solid var(--line);}
+  aside h2{font-family:"Bricolage Grotesque",sans-serif; font-size:.82rem; letter-spacing:.08em; text-transform:uppercase;
+           color:var(--accent-ink); margin:0; padding:12px 14px 6px;}
+  h2.sec{cursor:pointer; user-select:none;}
+  h2.sec .car{display:inline-block; transition:transform .15s; margin-right:4px; font-size:.7rem;}
+  @media (prefers-reduced-motion: reduce){ h2.sec .car{transition:none} }
+  h2.sec.closed .car{transform:rotate(-90deg);}
+
+  /* ---------- sidebar: use-cases, status chips, entry points ---------- */
+  .uc{display:block; width:100%; text-align:left; padding:8px 14px; border-bottom:1px solid var(--line);
+      font-size:.8rem; line-height:1.35;}
+  .uc:hover{background:var(--panel-2);}
+  .uc.active{background:var(--accent-soft); box-shadow:inset 3px 0 0 var(--flow);}
+  .uc .actor{color:var(--ink-3); font-size:.7rem;}
+  .badge{display:inline-block; font-family:"IBM Plex Mono",monospace; font-size:.6rem; border-radius:999px;
+         padding:1px 7px; background:var(--accent-soft); color:var(--accent-ink); margin-left:4px;}
+  .st{display:inline-block; font-family:"IBM Plex Mono",monospace; font-size:.58rem; border-radius:999px;
+      padding:1px 7px; margin-left:4px; border:1px solid transparent;}
+  .st.human-verified{background:var(--ok-soft); color:var(--ok); border-color:currentColor;}
+  .st.agent-verified{background:var(--accent-soft); color:var(--accent-ink);}
+  .st.inferred{background:var(--warn-soft); color:var(--warn);}
+  .st.hypothesis{background:var(--accent-soft); color:var(--accent-ink); border-style:dashed; border-color:currentColor;}
+  .st.outdated{background:var(--crit-soft); color:var(--crit);}
+  button.st{cursor:pointer;}
+  button.st:hover{border-color:currentColor;}
+  select.stsel{cursor:pointer; font-size:.68rem; padding:2px 6px; border-radius:8px; border:1px solid var(--line); margin-left:0;}
+  select.stsel option{background:var(--panel); color:var(--ink);}
+  .clear{margin:10px 14px; padding:5px 12px; border:1px solid var(--line); border-radius:8px; font-size:.75rem; color:var(--ink-2);}
+  .clear:hover{background:var(--panel-2);}
+  .kindhdr{padding:7px 14px 2px; font-family:"IBM Plex Mono",monospace; font-size:.62rem; letter-spacing:.07em;
+           text-transform:uppercase; color:var(--ink-3); background:var(--panel-2); border-bottom:1px solid var(--line);}
+  .ep{display:block; width:100%; text-align:left; padding:5px 14px; font-family:"IBM Plex Mono",monospace;
+      font-size:.68rem; border-bottom:1px solid var(--line); color:var(--ink-2);}
+  .ep:hover{background:var(--panel-2); color:var(--ink);}
+  .ep.active{background:var(--accent-soft); color:var(--ink); box-shadow:inset 3px 0 0 var(--accent);}
+  .ep .vw{color:var(--ink-3);}
+  .star{display:block; width:100%; text-align:left; padding:6px 14px; font-size:.78rem;
+        border-bottom:1px solid var(--line); line-height:1.35;}
+  .star:hover{background:var(--panel-2);}
+  .star .dot{display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px;
+             box-shadow:inset 0 0 0 1px var(--ring);}
+  .star .starnums{font-family:"IBM Plex Mono",monospace; font-size:.68rem; color:var(--ink-3);}
+
+  /* ---------- map: frame and breadcrumbs ---------- */
+  #mapwrap{position:relative; min-width:0; min-height:0; background:var(--paper);}
+  #map{width:100%; height:100%; display:block; cursor:grab; touch-action:none;}
+  #map.panning{cursor:grabbing;}
+  #crumbs{position:absolute; top:10px; left:12px; display:flex; gap:6px; align-items:center; z-index:4;
+          font-family:"IBM Plex Mono",monospace; font-size:.72rem; flex-wrap:wrap; max-width:calc(100% - 24px);}
+  #crumbs button{padding:4px 12px; border:1px solid var(--line); background:var(--panel); border-radius:8px; color:var(--ink-2);}
+  #crumbs button.on{background:var(--accent-soft); color:var(--accent-ink); border-color:var(--accent);}
+  #crumbs .crumbfile{color:var(--accent-ink); background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:4px 12px;}
+
+  /* ---------- map, packages scene: nodes per cluster + use-case and import overlays ---------- */
+  .cluster{fill:var(--panel); stroke:var(--line); rx:10;}
+  .clabel{font-family:"IBM Plex Mono",monospace; font-size:11px; fill:var(--ink-3);}
+  .node{stroke:var(--ring); stroke-width:1; rx:2.5; cursor:pointer;}
+  .node.dimmed{opacity:var(--dim);}
+  .node.sel{stroke:var(--ink); stroke-width:2.5;}
+  .node.hit{stroke:var(--accent); stroke-width:2.5;}
+  .halo{fill:none; stroke:var(--flow); stroke-width:2.5; pointer-events:none;}
+  /* the overlay decorations never take pointer events: they sit on top of the nodes */
+  .flowline{fill:none; stroke:var(--flow); stroke-width:2.4; opacity:.9; pointer-events:none;} /* also used by the flow scene */
+  .fbadge{pointer-events:none;}
+  .fbadge circle{fill:var(--flow); stroke:var(--flow-contrast); stroke-width:1.5;}
+  .fbadge text{fill:var(--flow-contrast); font-family:"IBM Plex Mono",monospace; font-size:10px; font-weight:700;
+               text-anchor:middle; dominant-baseline:central;}
+  .edge-in{fill:none; stroke:var(--ink-3); stroke-width:1.4; stroke-dasharray:4 3; opacity:.8; pointer-events:none;}
+  .edge-out{fill:none; stroke:var(--accent); stroke-width:1.6; opacity:.85; pointer-events:none;}
+
+  /* ---------- map, context scene: cluster boxes + aggregated imports ---------- */
+  .ctxbox{fill:var(--panel); stroke:var(--line); rx:12; cursor:pointer;}
+  .ctxbox.dimmed{opacity:.25;}
+  .ctxstripe{rx:2;}
+  .ctxlabel{font-family:"IBM Plex Mono",monospace; font-size:12px; fill:var(--ink); pointer-events:none;}
+  .ctxcount{font-family:"IBM Plex Mono",monospace; font-size:10px; fill:var(--ink-3); pointer-events:none;} /* also a tspan in the symbols scene */
+  .aggedge{fill:none; stroke:var(--ink-3); opacity:.4;}
+  .aggedge:hover{stroke:var(--accent); opacity:.9;}
+
+  /* ---------- map, symbols scene: classes, symbol pills, stubs and calls ---------- */
+  .classbox{fill:var(--panel-2); stroke:var(--line); rx:8;}
+  .classhdr{font-family:"IBM Plex Mono",monospace; font-size:11px; font-weight:700; fill:var(--ink);} /* also the title of the flow scene */
+  .pill{stroke:var(--ring); stroke-width:1; rx:9; cursor:pointer; fill:var(--panel);}
+  .pill.sel{stroke:var(--accent); stroke-width:2.2;}
+  .pill.dimmed{opacity:.25;}
+  .pilltext{font-family:"IBM Plex Mono",monospace; font-size:10px; fill:var(--ink-2); pointer-events:none;}
+  .stub{fill:var(--panel); stroke:var(--line); stroke-dasharray:5 3; rx:8; cursor:pointer;}
+  .stubtext{font-family:"IBM Plex Mono",monospace; font-size:10px; fill:var(--accent-ink); pointer-events:none;}
+  .calledge{fill:none; stroke:var(--ink-3); stroke-width:1.2; opacity:.35;}
+  .calledge.out{stroke:var(--accent); stroke-width:1.8; opacity:.95;}
+  .calledge.in{stroke:var(--ink-2); stroke-width:1.6; stroke-dasharray:4 3; opacity:.9;}
+  .calledge.faded{opacity:.06;}
+
+  /* ---------- map, flow scene: nodes of the hop chain / call tree ---------- */
+  .flownode{fill:var(--panel); stroke-width:2;}
+  .flowt1{font-family:"IBM Plex Mono",monospace; font-size:11px; fill:var(--ink); pointer-events:none;}
+  .flowt2{font-family:"IBM Plex Mono",monospace; font-size:9.5px; fill:var(--ink-3); pointer-events:none;}
+
+  /* ---------- map: controls (zoom, hint, tooltip) ---------- */
+  #zoomctl{position:absolute; bottom:14px; right:14px; display:flex; flex-direction:column; gap:6px;}
+  #zoomctl button{width:32px; height:32px; background:var(--panel); border:1px solid var(--line); border-radius:8px;
+                  font-size:1rem; box-shadow:var(--shadow);}
+  #hint{position:absolute; bottom:14px; left:14px; font-size:.68rem; color:var(--ink-3);
+        font-family:"IBM Plex Mono",monospace;}
+  #tip{position:absolute; pointer-events:none; background:var(--ink); color:var(--paper); font-family:"IBM Plex Mono",monospace;
+       font-size:.68rem; padding:4px 8px; border-radius:6px; opacity:0; max-width:380px; z-index:9;}
+
+  /* ---------- search: results dropdown ---------- */
+  #results{position:absolute; top:2px; left:0; right:0; margin:0 auto; max-width:420px; background:var(--panel);
+           border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); z-index:8; display:none;
+           max-height:320px; overflow-y:auto;}
+  #results button{display:block; width:100%; text-align:left; padding:6px 12px; font-family:"IBM Plex Mono",monospace;
+                  font-size:.72rem; border-bottom:1px solid var(--line);}
+  #results button:hover{background:var(--panel-2);}
+  #results .k{color:var(--ink-3); margin-right:6px;}
+
+  /* ---------- detail panel ---------- */
+  #detail .body{padding:10px 14px 30px; font-size:.8rem;}
+  #detail .path{font-family:"IBM Plex Mono",monospace; font-size:.72rem; color:var(--accent-ink); word-break:break-all;}
+  #detail h3{font-family:"Bricolage Grotesque",sans-serif; font-size:.78rem; margin:14px 0 4px; color:var(--ink-2);
+             text-transform:uppercase; letter-spacing:.06em;}
+  #detail ul{margin:4px 0; padding-left:16px;}
+  #detail li{margin:2px 0;}
+  #detail .sym{font-family:"IBM Plex Mono",monospace; font-size:.72rem;}
+  #detail .muted{color:var(--ink-3);}
+  #detail a.filelink,#detail a.symlink{color:var(--accent-ink); cursor:pointer; text-decoration:underline; text-decoration-color:var(--line);}
+  .opensym{margin:10px 6px 0 0; padding:5px 12px; border:1px solid var(--accent); border-radius:8px;
+           color:var(--accent-ink); font-size:.75rem;}
+  .opensym:hover{background:var(--accent-soft);}
+  .hoprow{display:flex; gap:8px; margin:6px 0; align-items:baseline; cursor:pointer;}
+  .hoprow:hover .hr-role{color:var(--ink);}
+  .hopn{flex:0 0 auto; width:18px; height:18px; border-radius:50%; background:var(--flow); color:var(--flow-contrast);
+        font-family:"IBM Plex Mono",monospace; font-size:.62rem; font-weight:700; display:flex; align-items:center; justify-content:center;}
+  .hr-sym{font-family:"IBM Plex Mono",monospace; font-size:.7rem; color:var(--accent-ink); word-break:break-all;}
+  .hr-role{font-size:.72rem; color:var(--ink-2);}
+  .empty{padding:20px 14px; color:var(--ink-3); font-size:.78rem;}
+</style>
+
+<header>
+  <h1>Matryoshker</h1>
+  <span class="commit" id="commitline"></span>
+  <input id="search" type="search" data-t-ph="search.placeholder" autocomplete="off" spellcheck="false">
+  <label class="tgl" id="mutedtgl" hidden><input type="checkbox" id="tgtests"> <span id="mutedlabel"></span></label>
+  <label class="tgl" id="starstgl"><input type="checkbox" id="tgstars"> <span data-t="toggle.stars"></span></label>
+  <div class="legend" id="legend"></div>
+</header>
+
+<div id="app">
+  <aside id="sidebar">
+    <h2 class="sec closed" id="ephdr" hidden><span class="car">&#9662;</span><span data-t="panel.entry_points"></span> <span class="badge" id="epn"></span></h2>
+    <div id="eplist" hidden></div>
+    <h2 class="sec closed" id="starhdr"><span class="car">&#9662;</span><span data-t="panel.stars"></span> <span class="badge" id="starn"></span></h2>
+    <div id="starlist" hidden></div>
+    <h2 class="sec" id="uchdr"><span class="car">&#9662;</span><span data-t="panel.usecases"></span> <span class="badge" id="ucn"></span></h2>
+    <div id="ucwrap">
+      <div id="uclist"></div>
+      <button class="clear" id="ucclear" data-t="uc.clear" hidden></button>
+      <button class="clear" data-exportst="1" data-t-title="uc.export_title"></button>
+    </div>
+  </aside>
+
+  <div id="mapwrap">
+    <div id="crumbs">
+      <button id="bctx" data-t="crumb.context"></button>
+      <button id="bpac" class="on" data-t="crumb.packages"></button>
+      <button id="bflow" data-t="crumb.flow" hidden></button>
+      <span class="crumbfile" id="bfile" hidden></span>
+      <button class="crumbfile" id="bep" data-t-title="crumb.entry_point_title" hidden></button>
+      <button class="crumbfile" id="btree" data-t-title="crumb.call_tree_title" hidden></button>
+      <button class="crumbfile" id="bhid" data-t-title="crumb.hidden_title" hidden></button>
+    </div>
+    <svg id="map" role="application" data-t-aria="map.aria">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--flow)"/>
+        </marker>
+        <marker id="arrg" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--ink-3)"/>
+        </marker>
+        <marker id="arra" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/>
+        </marker>
+      </defs>
+      <g id="world"></g>
+    </svg>
+    <div id="results"></div>
+    <div id="zoomctl">
+      <button id="zin" data-t-aria="zoom.in">+</button>
+      <button id="zout" data-t-aria="zoom.out">&#8722;</button>
+      <button id="zfit" data-t-aria="zoom.fit" data-t-title="zoom.fit">&#10530;</button>
+    </div>
+    <div id="hint" data-t="hint"></div>
+    <div id="tip"></div>
+  </div>
+
+  <aside id="detail">
+    <h2 id="dtitle"></h2>
+    <div class="body" id="dbody"><div class="empty" data-t="detail.empty"></div></div>
+  </aside>
+</div>
+
+<script type="application/json" id="data">__MATRYOSHKER_DATA__</script>
+<script>
+(function(){
+"use strict";
+// ==================== data and derived structures ====================
+const DATA = JSON.parse(document.getElementById('data').textContent);
+const F = DATA.files, IMP = DATA.imports, UCS = DATA.ucs, META = DATA.meta || {};
+const ENTRY_POINTS = DATA.entry_points || [], CALLS = DATA.calls || {};
+// group order of the entry-point panel; the pipeline sorts entry_points the same way
+const KINDS = ['http', 'command', 'event', 'cli', 'cron', 'other'];
+
+function esc(s){ return String(s).replace(/[&<>"]/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch])); }
+const baseName = p => p.split('/').pop();
+const callsOf = i => CALLS[i] || {n:[], x:[]};
+
+// ==================== UI strings ====================
+// Every user-visible string lives here, keyed by meta.lang. A key missing in one
+// language falls back to its English text; {placeholders} are substituted by t().
+// Not localized on purpose: the app title, the status values, the category labels
+// (they come from the config) and the cluster key '(root)'.
+const UI_STRINGS = {
+  en: {
+    'search.placeholder': 'search file, class, method…',
+    'search.none': 'nothing found',
+    'search.kind.file': 'file',
+    'search.kind.class': 'class',
+    'search.kind.method': 'method',
+    'search.kind.function': 'function',
+    'toggle.stars': 'stars',
+    'panel.entry_points': 'Entry points',
+    'kind.http': 'HTTP',
+    'kind.command': 'Commands',
+    'kind.event': 'Events',
+    'kind.cli': 'CLI',
+    'kind.cron': 'Scheduled',
+    'kind.other': 'Other',
+    'panel.stars': 'Stars',
+    'star.stats': 'UC {uc}/{total} · imp {imp} · calls {calls}',
+    'panel.usecases': 'Use-cases',
+    'badge.seam': 'seam',
+    'uc.clear': 'clear selection (Esc)',
+    'uc.export': 'export local statuses',
+    'uc.export_n': 'export local statuses ({n})',
+    'uc.export_title': 'builds the JSON snippet of your local status changes to paste into the repo via PR',
+    'crumb.context': 'Context',
+    'crumb.packages': 'Packages',
+    'crumb.flow': 'Flow',
+    'crumb.entry_point': 'entry point: {label} ×',
+    'crumb.entry_point_title': 'clear the entry-point lens',
+    'crumb.call_tree': 'call tree: {label} ×',
+    'crumb.call_tree_title': 'clear the call tree root',
+    'crumb.hidden': 'hidden folders: {n} ×',
+    'crumb.hidden_title': 'restore all hidden folders',
+    'map.aria': 'Code map in nested levels: context, packages, file',
+    'zoom.in': 'zoom in',
+    'zoom.out': 'zoom out',
+    'zoom.fit': 'fit to screen',
+    'hint': 'drag the background = pan · drag a node = arrange (Context/Symbols; Packages with an active UC) · double-click drills down · Esc goes up',
+    'tip.file': '{path} · {n} loc',
+    'ctx.files': '{n} files',
+    'ctx.hide': 'hide this folder',
+    'ctx.imports_title': '{a} → {b}: {n} imports',
+    'file.functions': 'functions',
+    'file.calls_other': 'calls into other files',
+    'flow.call_tree_title': '{label} — call tree (depth {d})',
+    'flow.empty': 'Select a use-case or an entry point to see the flow as a tree.',
+    'detail.title': 'Detail',
+    'detail.empty': 'Select a use-case or an entry point on the left, or click a file. Double-click a file to open its symbol map.',
+    'detail.empty_short': 'Select a use-case or an entry point on the left, or click a file.',
+    'detail.file': 'File',
+    'detail.lines': '{n} lines',
+    'detail.open_symbols': 'open symbol map ⌄',
+    'detail.call_tree_here': 'call tree from here',
+    'detail.in_this_uc': 'In this use-case',
+    'detail.classes': 'Classes',
+    'detail.functions': 'Functions',
+    'detail.ucs_here': 'Use-cases passing here ({n})',
+    'detail.ucs_here_note': 'linked by file — sibling routes of the same view share the list',
+    'detail.imports': 'Imports ({n})',
+    'detail.imported_by': 'Imported by ({n})',
+    'detail.symbols': 'Symbols',
+    'detail.symbols_stats': '{c} classes · {f} functions · {n} internal calls · {x} external',
+    'detail.symbols_help': 'Click a symbol to highlight its calls. Double-click a dashed box to jump to the called file. Esc goes back to packages.',
+    'detail.symbol': 'Symbol',
+    'detail.calls': 'Calls ({n})',
+    'detail.called_by': 'Called by ({n})',
+    'detail.in': 'in',
+    'detail.usecase': 'Use-case',
+    'detail.seam': 'crosses a seam',
+    'detail.status_title': 'local draft; make it official in the repo via PR (export local statuses)',
+    'detail.local': '· local',
+    'detail.hops': 'Hops ({n})',
+    'detail.rules': 'Rules involved',
+    'detail.entry_point': 'Entry point',
+    'export.title': 'Export statuses',
+    'export.body': "Local status changes ({n}). Apply them to the status field of the use-cases in the repo's data file (via PR) to make them official:"
+  },
+  'pt-BR': {
+    'search.placeholder': 'buscar arquivo, classe, método…',
+    'search.none': 'nada encontrado',
+    'search.kind.file': 'arquivo',
+    'search.kind.class': 'classe',
+    'search.kind.method': 'método',
+    'search.kind.function': 'função',
+    'toggle.stars': 'estrelas',
+    'panel.entry_points': 'Pontos de entrada',
+    'kind.http': 'HTTP',
+    'kind.command': 'Comandos',
+    'kind.event': 'Eventos',
+    'kind.cli': 'CLI',
+    'kind.cron': 'Agendados',
+    'kind.other': 'Outros',
+    'panel.stars': 'Estrelas',
+    'star.stats': 'UC {uc}/{total} · imp {imp} · cham {calls}',
+    'panel.usecases': 'Use-cases',
+    'badge.seam': 'seam',
+    'uc.clear': 'limpar seleção (Esc)',
+    'uc.export': 'exportar status locais',
+    'uc.export_n': 'exportar status locais ({n})',
+    'uc.export_title': 'gera o snippet JSON das alterações locais de status para colar no repo via PR',
+    'crumb.context': 'Contexto',
+    'crumb.packages': 'Pacotes',
+    'crumb.flow': 'Fluxo',
+    'crumb.entry_point': 'ponto de entrada: {label} ×',
+    'crumb.entry_point_title': 'limpar a lente do ponto de entrada',
+    'crumb.call_tree': 'árvore de chamadas: {label} ×',
+    'crumb.call_tree_title': 'limpar a raiz da árvore de chamadas',
+    'crumb.hidden': 'pastas ocultas: {n} ×',
+    'crumb.hidden_title': 'restaurar todas as pastas ocultas',
+    'map.aria': 'Mapa do código em níveis: contexto, pacotes, arquivo',
+    'zoom.in': 'aproximar',
+    'zoom.out': 'afastar',
+    'zoom.fit': 'ajustar à tela',
+    'hint': 'arraste o fundo = pan · arraste um nó = organizar (Contexto/Símbolos; Pacotes com UC ativo) · duplo-clique desce · Esc sobe',
+    'tip.file': '{path} · {n} loc',
+    'ctx.files': '{n} arquivos',
+    'ctx.hide': 'ocultar esta pasta',
+    'ctx.imports_title': '{a} → {b}: {n} imports',
+    'file.functions': 'funções',
+    'file.calls_other': 'chama em outros arquivos',
+    'flow.call_tree_title': '{label} — árvore de chamadas (prof. {d})',
+    'flow.empty': 'Selecione um use-case ou um ponto de entrada para ver o fluxo em árvore.',
+    'detail.title': 'Detalhe',
+    'detail.empty': 'Selecione um use-case ou um ponto de entrada à esquerda, ou clique num arquivo. Duplo-clique num arquivo abre o mapa de símbolos dele.',
+    'detail.empty_short': 'Selecione um use-case ou um ponto de entrada à esquerda, ou clique num arquivo.',
+    'detail.file': 'Arquivo',
+    'detail.lines': '{n} linhas',
+    'detail.open_symbols': 'abrir mapa de símbolos ⌄',
+    'detail.call_tree_here': 'árvore de chamadas a partir daqui',
+    'detail.in_this_uc': 'Neste use-case',
+    'detail.classes': 'Classes',
+    'detail.functions': 'Funções',
+    'detail.ucs_here': 'Use-cases que passam aqui ({n})',
+    'detail.ucs_here_note': 'vínculo por arquivo — rotas irmãs da mesma view compartilham a lista',
+    'detail.imports': 'Importa ({n})',
+    'detail.imported_by': 'Importado por ({n})',
+    'detail.symbols': 'Símbolos',
+    'detail.symbols_stats': '{c} classes · {f} funções · {n} chamadas internas · {x} externas',
+    'detail.symbols_help': 'Clique num símbolo para destacar as chamadas dele. Duplo-clique numa caixa tracejada salta para o arquivo chamado. Esc volta aos pacotes.',
+    'detail.symbol': 'Símbolo',
+    'detail.calls': 'Chama ({n})',
+    'detail.called_by': 'Chamado por ({n})',
+    'detail.in': 'em',
+    'detail.usecase': 'Use-case',
+    'detail.seam': 'cruza seam',
+    'detail.status_title': 'rascunho local; oficialize no repo via PR (exportar status locais)',
+    'detail.local': '· local',
+    'detail.hops': 'Hops ({n})',
+    'detail.rules': 'Regras envolvidas',
+    'detail.entry_point': 'Ponto de entrada',
+    'export.title': 'Exportar status',
+    'export.body': 'Alterações locais de status ({n}). Aplique-as ao campo status dos use-cases no arquivo de dados do repo (via PR) para oficializar:'
+  }
+};
+const LANG = UI_STRINGS[META.lang] ? META.lang : 'en';
+document.documentElement.lang = LANG;
+function t(key, vars){
+  let s = UI_STRINGS[LANG][key];
+  if (s === undefined) s = UI_STRINGS.en[key];
+  if (s === undefined) return key;
+  if (vars) s = s.replace(/\{(\w+)\}/g, (m, k0)=> vars[k0] === undefined ? m : String(vars[k0]));
+  return s;
+}
+// the static markup carries only keys; the texts are filled in here at boot
+function fillStaticStrings(){
+  document.querySelectorAll('[data-t]').forEach(el=> el.textContent = t(el.dataset.t));
+  document.querySelectorAll('[data-t-title]').forEach(el=> el.title = t(el.dataset.tTitle));
+  document.querySelectorAll('[data-t-aria]').forEach(el=> el.setAttribute('aria-label', t(el.dataset.tAria)));
+  document.querySelectorAll('[data-t-ph]').forEach(el=> el.placeholder = t(el.dataset.tPh));
+}
+
+// ==================== use-case status ====================
+// Canonical values; the v1 (Portuguese) values are still accepted in the data and are
+// displayed as the canonical one, so a map built before the rename still reads right.
+const ST_CYCLE = ['human-verified', 'agent-verified', 'inferred', 'hypothesis', 'outdated'];
+const ST_ALIAS = {
+  'verificado-humano': 'human-verified', 'verificado-agente': 'agent-verified',
+  'inferido': 'inferred', 'hipotese': 'hypothesis', 'hipótese': 'hypothesis',
+  'desatualizado': 'outdated'
+};
+function canonStatus(v){
+  const s = String(v || '');
+  if (ST_ALIAS[s]) return ST_ALIAS[s];
+  return ST_CYCLE.indexOf(s) >= 0 ? s : 'inferred';
+}
+
+// categories are DATA (repo-agnostic): colored ones take validated slots 1..6 in fixed order.
+const CATS = (META.categories && META.categories.length)
+  ? META.categories
+  : [...new Set(F.map(f=>f.g))].map(id=>({id, label:id}));
+const catInfo = new Map();
+{
+  let slot = 0, gray = 0;
+  for (const c of CATS){
+    const color = c.gray ? `var(--gray${Math.min(++gray,2)})` : `var(--slot${Math.min(++slot,6)})`;
+    catInfo.set(c.id, {label: c.label || c.id, color, muted: !!c.muted});
+  }
+}
+const CATCOLOR = g => (catInfo.get(g) || {color:'var(--gray1)'}).color;
+const isMutedCat = g => (catInfo.get(g) || {}).muted;
+
+// import adjacency: file -> files it imports / files that import it
+const outAdj = new Map(), inAdj = new Map();
+for (const [s0,t0] of IMP){
+  (outAdj.get(s0) ?? outAdj.set(s0,[]).get(s0)).push(t0);
+  (inAdj.get(t0) ?? inAdj.set(t0,[]).get(t0)).push(s0);
+}
+
+// reverse index file -> use-cases (join on hops[].i; precision = file level)
+const ucByFile = new Map();
+UCS.forEach((u,j)=>{
+  for (const h of u.hops){
+    (ucByFile.get(h.i) ?? ucByFile.set(h.i, new Set()).get(h.i)).add(j);
+  }
+});
+
+// orthogonal per-file centralities (Stars/SPOFs): use-cases touching it, imports received, calls received
+const ucCount = F.map((_,i)=> (ucByFile.get(i) || {size:0}).size);
+const impIn = F.map((_,i)=> (inAdj.get(i) || []).length);
+const callIn = new Array(F.length).fill(0);
+for (const f in CALLS) for (const e of (CALLS[f].x || [])) callIn[e[1]]++;
+let maxUc = 1;
+for (const n of ucCount) if (n > maxUc) maxUc = n;
+
+// ==================== state and DOM references ====================
+const svg = document.getElementById('map');
+const world = document.getElementById('world');
+const tip = document.getElementById('tip');
+const dbody = document.getElementById('dbody');
+const dtitle = document.getElementById('dtitle');
+const uclist = document.getElementById('uclist');
+const eplist = document.getElementById('eplist');
+const ephdr = document.getElementById('ephdr');
+const ucclear = document.getElementById('ucclear');
+const results = document.getElementById('results');
+const input = document.getElementById('search');
+
+let scene = 'pac';          // 'ctx' | 'pac' | 'file' | 'flow'
+let fileFocus = -1;         // symbols scene: index of the open file
+let selSym = null;          // symbols scene: selected symbol
+let activeEp = -1;          // index of the active entry point (lens in Context, focus elsewhere)
+let treeRoot = null;        // {i, symbol|null}: call tree opened from the symbols scene
+let activeUC = -1;          // index of the active use-case
+let selected = -1;          // packages scene: selected file
+let showMuted = false;      // show muted categories (tests, typically)
+let showStars = false;      // packages scene: centrality halos (toggle "stars"; not persisted)
+let searchHits = new Set(); // files highlighted by the search
+let pos = [];               // packages scene: {x,y} per file
+let symPos = new Map();     // symbols scene: symbol -> {x,y,w}
+let stubPos = new Map();    // symbols scene: target file -> {x,y,w}
+let k = 1, tx = 0, ty = 0;  // view transform (zoom + pan)
+
+// ==================== persistence (localStorage) ====================
+// per-viewer convenience; canonical updates go through the repo via PR
+const storeKey = `mtk:${META.repo || '?'}@${META.commit || '?'}`;
+const offs = { ctx: new Map(), pac: new Map(), file: new Map() }; // drag offsets per scene
+(function loadOffs(){
+  try{
+    const o = JSON.parse(localStorage.getItem(storeKey + ':pos') || '{}');
+    for (const s of ['ctx','pac','file']) if (o[s]) offs[s] = new Map(Object.entries(o[s]));
+  }catch(e){}
+})();
+function saveOffs(){
+  try{
+    const o = {};
+    for (const s of ['ctx','pac','file']) o[s] = Object.fromEntries(offs[s]);
+    localStorage.setItem(storeKey + ':pos', JSON.stringify(o));
+  }catch(e){}
+}
+let stOverrides = {};       // local drafts of use-case status
+try{ stOverrides = JSON.parse(localStorage.getItem(storeKey + ':st') || '{}'); }catch(e){}
+// an override written by an older viewer (Portuguese value) is simply ignored
+function ucStatus(u){
+  const o = stOverrides[u.name];
+  if (o && ST_CYCLE.indexOf(o) >= 0) return o;
+  return canonStatus(u.status);
+}
+function saveSt(){ try{ localStorage.setItem(storeKey + ':st', JSON.stringify(stOverrides)); }catch(e){} }
+let hiddenCks = new Set();  // clusters hidden in the Context scene (per-viewer preference; Esc does not clear it)
+try{ hiddenCks = new Set(JSON.parse(localStorage.getItem(storeKey + ':hidef') || '[]')); }catch(e){}
+function saveHidden(){ try{ localStorage.setItem(storeKey + ':hidef', JSON.stringify([...hiddenCks])); }catch(e){} }
+
+// ==================== layout and geometry ====================
+const NODE = 13, GAP = 5, PAD = 14, LABELH = 20;
+
+// '(root)' is an identifier, not prose: it is also a localStorage key, so it is the
+// same string in every language.
+function clusterKey(p){
+  const seg = p.split('/');
+  if (seg.length === 1) return '(root)';
+  if (seg.length === 2) return seg[0];
+  return seg[0] + '/' + seg[1];
+}
+function visible(i){ return showMuted || !isMutedCat(F[i].g); }
+function pillW(s){ return Math.max(46, s.length*6.6+16); }
+const nodeCenter = i => pos[i] ? {x: pos[i].x+NODE/2, y: pos[i].y+NODE/2} : null;
+// horizontal cubic curve between pills (symbols scene)
+function edgePath(a, b){
+  const ax=a.x+a.w, ay=a.y+9, bx=b.x, by=b.y+9;
+  const mx=(ax+bx)/2;
+  return `M${ax},${ay} C${mx},${ay} ${mx},${by} ${bx},${by}`;
+}
+// quadratic curve with a perpendicular belly proportional to the distance
+function liftedCurve(a, b, maxLift, frac){
+  const mx=(a.x+b.x)/2, my=(a.y+b.y)/2, dx=b.x-a.x, dy=b.y-a.y;
+  const L=Math.hypot(dx,dy)||1, lift=Math.min(maxLift, L*frac);
+  return `M${a.x},${a.y} Q${mx-dy/L*lift},${my+dx/L*lift} ${b.x},${b.y}`;
+}
+// groups the visible files per directory and places every node (fills `pos`); returns the clusters
+function layoutPac(){
+  pos = new Array(F.length).fill(null);
+  const groups = new Map();
+  F.forEach((f,i)=>{
+    if (!visible(i)) return;
+    const key = clusterKey(f.p);
+    (groups.get(key) ?? groups.set(key,[]).get(key)).push(i);
+  });
+  const cls = [...groups.entries()].map(([key,idxs])=>{
+    idxs.sort((a,b)=> F[a].g === F[b].g ? (F[a].p < F[b].p ? -1:1) : (F[a].g < F[b].g ? -1:1));
+    const n = idxs.length;
+    const cols = Math.max(2, Math.ceil(Math.sqrt(n*1.6)));
+    return {key, idxs, cols,
+      w: cols*(NODE+GAP)-GAP+2*PAD,
+      h: Math.ceil(n/cols)*(NODE+GAP)-GAP+2*PAD+LABELH};
+  }).sort((a,b)=> b.idxs.length - a.idxs.length);
+  const MAXW = 1500, CGAP = 26;
+  let x=0,y=0,rowH=0;
+  for (const c of cls){
+    if (x > 0 && x + c.w > MAXW){ x = 0; y += rowH + CGAP; rowH = 0; }
+    c.x = x; c.y = y;
+    x += c.w + CGAP; rowH = Math.max(rowH, c.h);
+    c.idxs.forEach((fi,j)=>{
+      pos[fi] = { x: c.x+PAD + (j%c.cols)*(NODE+GAP),
+                  y: c.y+PAD+LABELH + Math.floor(j/c.cols)*(NODE+GAP) };
+      if (activeUC >= 0){
+        const o = offs.pac.get(activeUC + ':' + fi);
+        if (o){ pos[fi].x += o.dx; pos[fi].y += o.dy; }
+      }
+    });
+  }
+  return cls;
+}
+
+// ==================== renders (pac / ctx / file / flow) ====================
+function render(){
+  symPos = new Map(); stubPos = new Map();
+  if (scene === 'pac') renderPac();
+  else if (scene === 'ctx') renderCtx();
+  else if (scene === 'flow') renderFlow();
+  else renderFile();
+  document.getElementById('bctx').classList.toggle('on', scene==='ctx');
+  document.getElementById('bpac').classList.toggle('on', scene==='pac');
+  const bfl = document.getElementById('bflow');
+  bfl.hidden = !(activeUC >= 0 || activeEp >= 0 || treeRoot);
+  bfl.classList.toggle('on', scene==='flow');
+  const bf = document.getElementById('bfile');
+  bf.hidden = scene !== 'file';
+  if (scene === 'file') bf.textContent = '› ' + baseName(F[fileFocus].p);
+  const be = document.getElementById('bep');
+  be.hidden = activeEp < 0;
+  if (activeEp >= 0) be.textContent = t('crumb.entry_point', {label: ENTRY_POINTS[activeEp].label});
+  const bt = document.getElementById('btree');
+  bt.hidden = !treeRoot;
+  if (treeRoot) bt.textContent = t('crumb.call_tree',
+    {label: baseName(F[treeRoot.i].p) + (treeRoot.symbol ? ':' + treeRoot.symbol : '')});
+  const bh = document.getElementById('bhid');
+  bh.hidden = !(scene === 'ctx' && hiddenCks.size > 0);
+  if (!bh.hidden) bh.textContent = t('crumb.hidden', {n: hiddenCks.size});
+  eplist.querySelectorAll('.ep').forEach(el=> el.classList.toggle('active', +el.dataset.ep === activeEp));
+}
+function entryReach(){
+  // BFS of depth 2 over imports, starting at the file of the active entry point
+  if (activeEp < 0) return null;
+  const seen = new Set([ENTRY_POINTS[activeEp].i]);
+  let frontier = [ENTRY_POINTS[activeEp].i];
+  for (let d = 0; d < 2; d++){
+    const next = [];
+    for (const f of frontier) for (const t0 of (outAdj.get(f) || []))
+      if (!seen.has(t0)){ seen.add(t0); next.push(t0); }
+    frontier = next;
+  }
+  return seen;
+}
+function renderPac(){
+  const clusters = layoutPac();
+  let s = '';
+  for (const c of clusters){
+    s += `<rect class="cluster" x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" rx="10"/>`;
+    s += `<text class="clabel" x="${c.x+PAD}" y="${c.y+15}">${esc(c.key)} · ${c.idxs.length}</text>`;
+  }
+  // star halos: a layer BEFORE the nodes (so it never steals clicks); immune to the active-UC dim
+  if (showStars){
+    s += `<g id="halos">`;
+    for (let i=0;i<F.length;i++){
+      if (!pos[i] || !ucCount[i]) continue;
+      s += `<circle class="halo" cx="${pos[i].x+NODE/2}" cy="${pos[i].y+NODE/2}" r="${NODE/2+4}" opacity="${(0.25 + 0.65*ucCount[i]/maxUc).toFixed(3)}"/>`;
+    }
+    s += `</g>`;
+  }
+  for (let i=0;i<F.length;i++){
+    if (!pos[i]) continue;
+    s += `<rect class="node" data-i="${i}" x="${pos[i].x}" y="${pos[i].y}" width="${NODE}" height="${NODE}" rx="2.5" fill="${CATCOLOR(F[i].g)}"/>`;
+  }
+  s += `<g id="overlay"></g>`;
+  world.innerHTML = s;
+  paintState();
+}
+// packages-scene overlay: dim/selection/hits + trail of the active UC + import edges of the selected file
+function paintState(){
+  if (scene !== 'pac') return;
+  const ucSet = new Set();
+  let seq = [];
+  if (activeUC >= 0){
+    for (const h of UCS[activeUC].hops) if (pos[h.i]) ucSet.add(h.i);
+    for (const h of UCS[activeUC].hops){
+      if (!pos[h.i]) continue;
+      if (!seq.length || seq[seq.length-1] !== h.i) seq.push(h.i);
+    }
+  }
+  world.querySelectorAll('.node').forEach(el=>{
+    const i = +el.dataset.i;
+    el.classList.toggle('dimmed', activeUC >= 0 && !ucSet.has(i));
+    el.classList.toggle('sel', i === selected);
+    el.classList.toggle('hit', searchHits.has(i));
+  });
+  const ov = world.querySelector('#overlay');
+  if (!ov) return;
+  let s = '';
+  if (activeUC >= 0 && seq.length){
+    for (let j=0;j<seq.length-1;j++){
+      const a = nodeCenter(seq[j]), b = nodeCenter(seq[j+1]);
+      if (!a || !b) continue;
+      s += `<path class="flowline" marker-end="url(#arr)" d="${liftedCurve(a, b, 70, 0.22)}"/>`;
+    }
+    const order = new Map();
+    seq.forEach(i=>{ if(!order.has(i)) order.set(i, order.size+1); });
+    for (const [i,n] of order){
+      const c = nodeCenter(i);
+      s += `<g class="fbadge"><circle cx="${c.x-7}" cy="${c.y-9}" r="9"/><text x="${c.x-7}" y="${c.y-9}">${n}</text></g>`;
+    }
+  }
+  if (selected >= 0 && pos[selected]){
+    const a = nodeCenter(selected);
+    for (const t0 of (outAdj.get(selected)||[])){ const b = nodeCenter(t0); if (b) s += `<path class="edge-out" d="M${a.x},${a.y} L${b.x},${b.y}"/>`; }
+    for (const t0 of (inAdj.get(selected)||[])){ const b = nodeCenter(t0); if (b) s += `<path class="edge-in" d="M${b.x},${b.y} L${a.x},${a.y}"/>`; }
+  }
+  ov.innerHTML = s;
+}
+function renderCtx(){
+  const clusters = layoutPac(); // reuse the grouping; draw boxes on a compact grid
+  // hidden clusters (this scene only): out of the boxes AND of the aggregated edges (bkey does not resolve them)
+  const boxes = clusters.filter(c=>!hiddenCks.has(c.key)).map(c=>{
+    const domCat = (()=>{ const cnt={}; c.idxs.forEach(i=>cnt[F[i].g]=(cnt[F[i].g]||0)+1);
+      return Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0][0]; })();
+    return {key:c.key, n:c.idxs.length, domCat, idxs:c.idxs,
+            w: Math.max(96, c.key.length*7.5+30), h: 52};
+  });
+  const MAXW = 900, CG = 60, RG = 80;
+  let x=0,y=0,rowH=0;
+  for (const b of boxes){
+    if (x > 0 && x + b.w > MAXW){ x=0; y += rowH + RG; rowH = 0; }
+    b.x=x; b.y=y; x += b.w + CG; rowH = Math.max(rowH, b.h);
+    const o = offs.ctx.get(b.key);
+    if (o){ b.x += o.dx; b.y += o.dy; }
+  }
+  const bkey = new Map(boxes.map(b=>[b.key,b]));
+  // aggregated import edges between clusters (NUL separator: never occurs in a cluster name)
+  const agg = new Map();
+  for (const [s0,t0] of IMP){
+    if (!pos[s0] || !pos[t0]) continue;
+    const a = clusterKey(F[s0].p), b = clusterKey(F[t0].p);
+    if (a === b) continue;
+    const key = a + '\u0000' + b;
+    agg.set(key, (agg.get(key)||0)+1);
+  }
+  let s = '';
+  for (const [key,n] of agg){
+    if (n < 2) continue;
+    const [ka,kb] = key.split('\u0000');
+    const A = bkey.get(ka), B = bkey.get(kb);
+    if (!A || !B) continue;
+    const ctrA = {x:A.x+A.w/2, y:A.y+A.h/2}, ctrB = {x:B.x+B.w/2, y:B.y+B.h/2};
+    const w = 1 + Math.log2(n);
+    s += `<path class="aggedge" marker-end="url(#arrg)" stroke-width="${w.toFixed(1)}"
+           d="${liftedCurve(ctrA, ctrB, 90, 0.18)}"><title>${esc(t('ctx.imports_title', {a:ka, b:kb, n}))}</title></path>`;
+  }
+  // lenses: the entry point takes precedence over the use-case in the Context scene
+  const reach = entryReach();
+  const focusClusters = new Set();
+  if (reach){ for (const i of reach) if (pos[i]) focusClusters.add(clusterKey(F[i].p)); }
+  else if (activeUC >= 0) for (const h of UCS[activeUC].hops) focusClusters.add(clusterKey(F[h.i].p));
+  const lensOn = reach !== null || activeUC >= 0;
+  if (reach){
+    const epc = clusterKey(F[ENTRY_POINTS[activeEp].i].p);
+    const B = bkey.get(epc);
+    if (B) s += `<text class="ctxlabel" x="${B.x}" y="${B.y-8}" style="fill:var(--accent-ink)">${esc(ENTRY_POINTS[activeEp].label)}</text>`;
+  }
+  for (const b of boxes){
+    const dim = lensOn && !focusClusters.has(b.key) ? ' dimmed' : '';
+    s += `<g data-ck="${esc(b.key)}" style="cursor:pointer">
+      <rect class="ctxbox${dim}" x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}"/>
+      <rect class="ctxstripe${dim}" x="${b.x+10}" y="${b.y+8}" width="26" height="5" fill="${CATCOLOR(b.domCat)}"/>
+      <text class="ctxlabel" x="${b.x+10}" y="${b.y+30}">${esc(b.key)}</text>
+      <text class="ctxcount" x="${b.x+10}" y="${b.y+44}">${esc(t('ctx.files', {n:b.n}))}</text>
+      <g data-hidectx="${esc(b.key)}"><title>${esc(t('ctx.hide'))}</title>
+        <rect x="${b.x+b.w-18}" y="${b.y+2}" width="16" height="16" fill="transparent"/>
+        <text class="ctxcount" x="${b.x+b.w-14}" y="${b.y+14}">×</text></g></g>`;
+  }
+  world.innerHTML = s;
+}
+function renderFile(){
+  const f = F[fileFocus];
+  const cd = callsOf(fileFocus);
+  let s = '', y = 0;
+  const COLW = 640;
+  // free functions
+  if (f.f.length){
+    let x = 0;
+    s += `<text class="classhdr" x="0" y="${y+12}">${esc(t('file.functions'))}</text>`; y += 22;
+    for (const fn of f.f){
+      const w = pillW(fn[0]);
+      if (x > 0 && x + w > COLW){ x = 0; y += 26; }
+      const o = offs.file.get(fileFocus + ':' + fn[0]) || {dx:0,dy:0};
+      const sp = {x: x+o.dx, y: y+o.dy, w};
+      symPos.set(fn[0], sp);
+      s += `<rect class="pill" data-sym="${esc(fn[0])}" x="${sp.x}" y="${sp.y}" width="${w}" height="19"/>` +
+           `<text class="pilltext" x="${sp.x+8}" y="${sp.y+13}">${esc(fn[0])}</text>`;
+      x += w + 8;
+    }
+    y += 40;
+  }
+  // classes with method pills
+  for (const c of f.c){
+    const hdrY = y;
+    y += 26; let x = 12, boxH = 26;
+    const rows = [];
+    for (const m of c[3]){
+      const w = pillW(m);
+      if (x > 12 && x + w > COLW-12){ x = 12; y += 26; boxH += 26; }
+      rows.push({m, x, y, w});
+      x += w + 8;
+    }
+    boxH += c[3].length ? 30 : 8;
+    s += `<rect class="classbox" x="0" y="${hdrY}" width="${COLW}" height="${boxH+18}"/>` +
+         `<text class="classhdr" x="12" y="${hdrY+18}">${esc(c[0])} <tspan class="ctxcount">:${c[1]}–${c[2]}</tspan></text>`;
+    for (const r of rows){
+      const o = offs.file.get(fileFocus + ':' + r.m) || {dx:0,dy:0};
+      const xx = r.x + o.dx, yy = r.y + 8 + o.dy;
+      symPos.set(r.m, {x:xx, y:yy, w:r.w});
+      s += `<rect class="pill" data-sym="${esc(r.m)}" x="${xx}" y="${yy}" width="${r.w}" height="19"/>` +
+           `<text class="pilltext" x="${xx+8}" y="${yy+13}">${esc(r.m)}</text>`;
+    }
+    y = hdrY + boxH + 18 + 16;
+  }
+  // stubs: imported files referenced by cross-file calls
+  const stubX = COLW + 120;
+  const tgts = [...new Set(cd.x.map(e=>e[1]))];
+  let sy = 0;
+  s += tgts.length ? `<text class="classhdr" x="${stubX}" y="12">${esc(t('file.calls_other'))}</text>` : '';
+  for (const t0 of tgts){
+    const label = baseName(F[t0].p);
+    const w = pillW(label) + 12;
+    const o = offs.file.get(fileFocus + ':stub:' + t0) || {dx:0,dy:0};
+    const sxx = stubX + o.dx, syy = 24 + sy + o.dy;
+    stubPos.set(t0, {x: sxx, y: syy, w});
+    s += `<rect class="stub" data-stub="${t0}" x="${sxx}" y="${syy}" width="${w}" height="22"/>` +
+         `<text class="stubtext" x="${sxx+8}" y="${syy+15}">${esc(label)}</text>`;
+    sy += 32;
+  }
+  s += `<g id="fedges"></g>`;
+  world.innerHTML = s;
+  paintFileEdges();
+}
+// call edges of the symbols scene + highlight of the selected symbol
+function paintFileEdges(){
+  const cd = callsOf(fileFocus);
+  const g = world.querySelector('#fedges');
+  if (!g) return;
+  let s = '';
+  const rel = e => selSym && (e[0] === selSym);
+  const relIn = e => selSym && (e[1] === selSym);
+  for (const e of cd.n){
+    const a = symPos.get(e[0]), b = symPos.get(e[1]);
+    if (!a || !b || e[0] === e[1]) continue;
+    const cls = !selSym ? 'calledge' : rel(e) ? 'calledge out' : relIn(e) ? 'calledge in' : 'calledge faded';
+    const mk = cls.includes('out') ? 'arra' : 'arrg';
+    s += `<path class="${cls}" marker-end="url(#${mk})" d="${edgePath(a,b)}"><title>${esc(e[0])} → ${esc(e[1])} :${e[2]}</title></path>`;
+  }
+  for (const e of cd.x){
+    const a = symPos.get(e[0]), b = stubPos.get(e[1]);
+    if (!a || !b) continue;
+    const cls = !selSym ? 'calledge' : (e[0] === selSym ? 'calledge out' : 'calledge faded');
+    s += `<path class="${cls}" marker-end="url(#${cls.includes('out')?'arra':'arrg'})" d="${edgePath(a,b)}"><title>${esc(e[0])} → ${esc(e[2])} (${esc(baseName(F[e[1]].p))}) :${e[3]}</title></path>`;
+  }
+  g.innerHTML = s;
+  world.querySelectorAll('.pill').forEach(el=>{
+    el.classList.toggle('sel', el.dataset.sym === selSym);
+    el.classList.toggle('dimmed', !!selSym && el.dataset.sym !== selSym &&
+      !cd.n.some(e=>(e[0]===selSym&&e[1]===el.dataset.sym)||(e[1]===selSym&&e[0]===el.dataset.sym)));
+  });
+}
+// cross-file call tree rooted at a file (optionally at one of its symbols)
+const TREE_DEPTH = 3;
+function callTreeSvg(rootI, rootSym){
+  const NODEW=176, NODEH=34, LX=24, LY=88, MAXCH=8;
+  const visited = new Set();
+  function build(fi, d, sym){
+    visited.add(fi);
+    const kids = []; let extra = 0;
+    if (d < TREE_DEPTH){
+      let edges = callsOf(fi).x || [];
+      // only the root can be narrowed to one symbol; deeper levels are file-level
+      if (sym) edges = edges.filter(e=>e[0] === sym);
+      const tg = [...new Set(edges.map(e=>e[1]))].filter(t0=>!visited.has(t0));
+      for (const t0 of tg.slice(0, MAXCH)) kids.push(build(t0, d+1, null));
+      extra = Math.max(0, tg.length - MAXCH);
+    }
+    const w = kids.length ? kids.reduce((a,c)=>a+c.w, 0) + LX*(kids.length-1) : NODEW;
+    return {fi, kids, w, extra};
+  }
+  const root = build(rootI, 0, rootSym || null);
+  (function place(n, x, y){
+    n.x = x + n.w/2 - NODEW/2; n.y = y;
+    let cx = x;
+    for (const c of n.kids){ place(c, cx, y + LY); cx += c.w + LX; }
+  })(root, 0, 24);
+  let s = '';
+  (function draw(n){
+    for (const c of n.kids){
+      s += `<path class="calledge" marker-end="url(#arrg)" d="M${n.x+NODEW/2},${n.y+NODEH} C${n.x+NODEW/2},${n.y+NODEH+34} ${c.x+NODEW/2},${c.y-34} ${c.x+NODEW/2},${c.y}" style="opacity:.7"/>`;
+      draw(c);
+    }
+    const f = F[n.fi];
+    const label = baseName(f.p);
+    s += `<g data-i="${n.fi}" style="cursor:pointer">
+      <rect class="flownode" x="${n.x}" y="${n.y}" width="${NODEW}" height="${NODEH}" rx="8" style="stroke:${CATCOLOR(f.g)}"/>
+      <text class="flowt1" x="${n.x+10}" y="${n.y+21}">${esc(label.length>23 ? label.slice(0,22)+'…' : label)}</text></g>`;
+    if (n.extra) s += `<text class="flowt2" x="${n.x+NODEW+5}" y="${n.y+21}">+${n.extra}</text>`;
+  })(root);
+  return s;
+}
+// precedence in the Flow scene: active use-case > active entry point > call tree root
+function renderFlow(){
+  let s = '';
+  if (activeUC >= 0){
+    // use-case flow: hops in a vertical column
+    const u = UCS[activeUC];
+    const W = 470, X = 0;
+    let y = 0;
+    u.hops.forEach((h, idx)=>{
+      const f = F[h.i];
+      const label = baseName(f.p) + (h.s ? ' : ' + h.s : '');
+      const role = h.r.length > 66 ? h.r.slice(0, 65) + '…' : h.r;
+      s += `<g data-i="${h.i}" style="cursor:pointer">
+        <rect class="flownode" x="${X}" y="${y}" width="${W}" height="46" rx="9" style="stroke:${CATCOLOR(f.g)}"/>
+        <text class="flowt1" x="${X+12}" y="${y+19}">${idx+1}. ${esc(label)}</text>
+        <text class="flowt2" x="${X+12}" y="${y+36}">${esc(role)}</text></g>`;
+      if (idx < u.hops.length - 1)
+        s += `<path class="flowline" marker-end="url(#arr)" d="M${X+W/2},${y+46} L${X+W/2},${y+63}"/>`;
+      y += 64;
+    });
+    s = `<text class="classhdr" x="0" y="-18">${esc(u.name)}</text>` + s;
+  } else if (activeEp >= 0){
+    // entry point: call tree from the file where execution enters
+    const ep = ENTRY_POINTS[activeEp];
+    const label = ep.label + (ep.symbol ? ' · ' + ep.symbol : '');
+    s = `<text class="classhdr" x="0" y="0">${esc(t('flow.call_tree_title', {label, d: TREE_DEPTH}))}</text>` +
+        callTreeSvg(ep.i, null);
+  } else if (treeRoot){
+    // call tree launched from the symbols scene
+    const label = baseName(F[treeRoot.i].p) + (treeRoot.symbol ? ' · ' + treeRoot.symbol : '');
+    s = `<text class="classhdr" x="0" y="0">${esc(t('flow.call_tree_title', {label, d: TREE_DEPTH}))}</text>` +
+        callTreeSvg(treeRoot.i, treeRoot.symbol);
+  } else {
+    s = `<text class="classhdr" x="0" y="0">${esc(t('flow.empty'))}</text>`;
+  }
+  world.innerHTML = s;
+}
+
+// ==================== scene navigation ====================
+function go(sc, opts={}){
+  scene = sc;
+  if (sc === 'file' && opts.i != null){ fileFocus = opts.i; selSym = opts.sym || null; }
+  if (sc !== 'file') selSym = null;
+  render();
+  fit();
+  if (sc === 'file') fileDetail();
+}
+document.getElementById('bctx').onclick = ()=> go('ctx');
+document.getElementById('bpac').onclick = ()=> go('pac');
+document.getElementById('bflow').onclick = ()=> go('flow');
+document.getElementById('bep').addEventListener('click', ()=>{ activeEp = -1; render(); });
+document.getElementById('btree').addEventListener('click', ()=>{ treeRoot = null; render(); });
+document.getElementById('bhid').addEventListener('click', ()=>{ hiddenCks.clear(); saveHidden(); render(); });
+// Esc goes up one level: search results > selected symbol > symbols/flow scene >
+// entry point or call tree root > selected file > active use-case > context
+document.addEventListener('keydown', e=>{
+  if (e.key !== 'Escape') return;
+  if (results.style.display === 'block'){ results.style.display='none'; input.value=''; searchHits=new Set(); paintState(); }
+  else if (scene === 'file' && selSym){ selSym = null; paintFileEdges(); fileDetail(); }
+  else if (scene === 'file' || scene === 'flow'){ go('pac'); }
+  else if (activeEp >= 0){ activeEp = -1; render(); }
+  else if (treeRoot){ treeRoot = null; render(); }
+  else if (selected >= 0){ selected = -1; paintState(); }
+  else if (activeUC >= 0) setUC(-1);
+  else if (scene !== 'ctx') go('ctx');
+});
+
+// ==================== map interaction (pan / zoom / drag / hover / click) ====================
+function apply(){ world.setAttribute('transform', `translate(${tx},${ty}) scale(${k})`); }
+function fit(){
+  let bb;
+  try { bb = world.getBBox(); } catch(e){ return; }
+  const W = svg.clientWidth, H = svg.clientHeight;
+  if (!bb.width || !W) return;
+  k = Math.min(W/(bb.width+60), H/(bb.height+60), 2.2);
+  tx = (W - bb.width*k)/2 - bb.x*k;
+  ty = (H - bb.height*k)/2 - bb.y*k;
+  apply();
+}
+function centerOn(i){
+  const c = nodeCenter(i);
+  if (!c) return;
+  k = Math.max(k, 1.4);
+  tx = svg.clientWidth/2 - c.x*k;
+  ty = svg.clientHeight/2 - c.y*k;
+  apply();
+}
+svg.addEventListener('wheel', e=>{
+  e.preventDefault();
+  const f = Math.exp(-e.deltaY*0.0012);
+  const nk = Math.min(8, Math.max(0.12, k*f));
+  const r = svg.getBoundingClientRect(), px = e.clientX-r.left, py = e.clientY-r.top;
+  tx = px - (px-tx)*(nk/k); ty = py - (py-ty)*(nk/k); k = nk; apply();
+}, {passive:false});
+document.getElementById('zin').onclick = ()=>{ k=Math.min(8,k*1.35); apply(); };
+document.getElementById('zout').onclick = ()=>{ k=Math.max(0.12,k/1.35); apply(); };
+document.getElementById('zfit').onclick = fit;
+
+let pan = null, downEl = null, lastHit = null, drag = null, rafPending = false; // transient state of the current gesture
+function sceneRerender(){
+  if (rafPending) return;
+  rafPending = true;
+  requestAnimationFrame(()=>{ rafPending = false; render(); });
+}
+function dragTargetFor(el){
+  // dragging: always in Context and Symbols; in Packages only with an active UC (per-UC arrangement)
+  if (!el) return null;
+  if (scene === 'ctx' && el.dataset.ck != null) return {map:'ctx', key: el.dataset.ck};
+  if (scene === 'file' && el.dataset.sym != null) return {map:'file', key: fileFocus + ':' + el.dataset.sym};
+  if (scene === 'file' && el.dataset.stub != null) return {map:'file', key: fileFocus + ':stub:' + el.dataset.stub};
+  if (scene === 'pac' && el.dataset.i != null && activeUC >= 0 &&
+      UCS[activeUC].hops.some(h=>h.i === +el.dataset.i))
+    return {map:'pac', key: activeUC + ':' + el.dataset.i};
+  return null;
+}
+svg.addEventListener('pointerdown', e=>{
+  // stash the target NOW: setPointerCapture retargets pointerup to the svg
+  downEl = e.target.closest('[data-hidectx],[data-i],[data-sym],[data-stub],[data-ck]');
+  lastHit = downEl;
+  const dt = dragTargetFor(downEl);
+  if (dt){
+    const base = offs[dt.map].get(dt.key) || {dx:0, dy:0};
+    drag = {...dt, sx:e.clientX, sy:e.clientY, bdx:base.dx, bdy:base.dy};
+  } else {
+    pan = {x:e.clientX, y:e.clientY, tx, ty};
+  }
+  svg.classList.add('panning'); svg.setPointerCapture(e.pointerId);
+});
+svg.addEventListener('pointermove', e=>{
+  if (drag && (e.buttons & 1)){
+    offs[drag.map].set(drag.key, {dx: drag.bdx + (e.clientX-drag.sx)/k, dy: drag.bdy + (e.clientY-drag.sy)/k});
+    sceneRerender();
+  }
+  else if (pan && (e.buttons & 1)){ tx = pan.tx + (e.clientX-pan.x); ty = pan.ty + (e.clientY-pan.y); apply(); }
+  else {
+    const el = e.target.closest('.node');
+    if (el){
+      const f = F[+el.dataset.i];
+      tip.textContent = t('tip.file', {path: f.p, n: f.n});
+      tip.style.opacity = 1;
+      const r = document.getElementById('mapwrap').getBoundingClientRect();
+      tip.style.left = Math.min(e.clientX-r.left+14, r.width-tip.offsetWidth-8)+'px';
+      tip.style.top = (e.clientY-r.top+14)+'px';
+    } else tip.style.opacity = 0;
+  }
+});
+svg.addEventListener('pointerup', e=>{
+  svg.classList.remove('panning');
+  const start = drag ? {x:drag.sx, y:drag.sy} : pan;
+  const moved = start && (Math.abs(e.clientX-start.x)+Math.abs(e.clientY-start.y) > 5);
+  if (drag && moved) saveOffs();
+  pan = null; drag = null;
+  const el = downEl; downEl = null;
+  if (moved || !el) return;
+  // the folder-hiding cross consumes the click before the box click (which navigates to Packages)
+  if (el.dataset.hidectx != null){ hiddenCks.add(el.dataset.hidectx); saveHidden(); render(); return; }
+  if (el.dataset.i != null) selectFile(+el.dataset.i);
+  else if (el.dataset.sym != null){ selSym = (selSym === el.dataset.sym ? null : el.dataset.sym); paintFileEdges(); symDetail(); }
+  else if (el.dataset.stub != null) selectFile(+el.dataset.stub);
+  else if (el.dataset.ck != null){ go('pac'); }
+});
+svg.addEventListener('dblclick', e=>{
+  // pointer capture retargets dblclick to the svg, so fall back to the last node pressed
+  const el = e.target.closest('[data-i],[data-stub]') ||
+             (lastHit && lastHit.closest('[data-i],[data-stub]'));
+  if (!el) return;
+  const i = el.dataset.i != null ? +el.dataset.i : +el.dataset.stub;
+  go('file', {i});
+});
+svg.addEventListener('pointerleave', ()=> tip.style.opacity = 0);
+
+// ==================== detail panel (file / symbol / entry point) ====================
+function fileLink(i){ return `<a class="filelink" data-go="${i}">${esc(baseName(F[i].p))}</a>`; }
+function selectFile(i){
+  selected = i;
+  if (scene === 'pac') paintState();
+  const f = F[i];
+  dtitle.textContent = t('detail.file');
+  let h = `<div class="path">${esc(f.p)}</div>
+    <div class="muted">${esc(t('detail.lines', {n:f.n}))} · <span style="color:${CATCOLOR(f.g)}">●</span> ${esc((catInfo.get(f.g)||{}).label||f.g)}</div>
+    <button class="opensym" data-open="${i}">${esc(t('detail.open_symbols'))}</button>`;
+  if (activeUC >= 0){
+    const roles = UCS[activeUC].hops.filter(x=>x.i===i);
+    if (roles.length){
+      h += `<h3>${esc(t('detail.in_this_uc'))}</h3><ul>` +
+        roles.map(x=>`<li><span class="sym">${esc(x.s||'—')}</span> <span class="muted">${esc(x.r)}</span></li>`).join('') + `</ul>`;
+    }
+  }
+  if (f.c.length){
+    h += `<h3>${esc(t('detail.classes'))}</h3><ul>` + f.c.map(c=>
+      `<li><span class="sym">${esc(c[0])}</span> <span class="muted">:${c[1]}–${c[2]}</span>` +
+      (c[3].length ? `<div class="muted sym" style="font-size:.65rem">${esc(c[3].join(' · '))}</div>` : '') + `</li>`).join('') + `</ul>`;
+  }
+  if (f.f.length){
+    h += `<h3>${esc(t('detail.functions'))}</h3><ul>` + f.f.map(x=>`<li class="sym">${esc(x[0])} <span class="muted">:${x[1]}</span></li>`).join('') + `</ul>`;
+  }
+  const ucsHere = [...(ucByFile.get(i) || [])];
+  if (ucsHere.length){
+    h += `<h3>${esc(t('detail.ucs_here', {n:ucsHere.length}))}</h3>
+      <div class="muted" style="font-size:.68rem">${esc(t('detail.ucs_here_note'))}</div><ul>` +
+      ucsHere.map(j=>`<li style="font-size:.75rem"><a class="filelink" data-setuc="${j}">${esc(UCS[j].name)}</a></li>`).join('') + `</ul>`;
+  }
+  const outs = (outAdj.get(i)||[]).filter(t0=>visible(t0)), ins = (inAdj.get(i)||[]).filter(t0=>visible(t0));
+  h += `<h3>${esc(t('detail.imports', {n:outs.length}))}</h3><div class="sym">${outs.map(fileLink).join(', ')||'<span class="muted">—</span>'}</div>`;
+  h += `<h3>${esc(t('detail.imported_by', {n:ins.length}))}</h3><div class="sym">${ins.map(fileLink).join(', ')||'<span class="muted">—</span>'}</div>`;
+  dbody.innerHTML = h;
+}
+function fileDetail(){
+  const cd = callsOf(fileFocus);
+  const f = F[fileFocus];
+  dtitle.textContent = t('detail.symbols');
+  dbody.innerHTML = `<div class="path">${esc(f.p)}</div>
+    <div class="muted">${esc(t('detail.symbols_stats', {c:f.c.length, f:f.f.length, n:cd.n.length, x:cd.x.length}))}</div>
+    <button class="opensym" data-tree="file">${esc(t('detail.call_tree_here'))}</button>
+    <p class="muted" style="font-size:.72rem">${esc(t('detail.symbols_help'))}</p>`;
+}
+function symDetail(){
+  if (!selSym){ fileDetail(); return; }
+  const cd = callsOf(fileFocus);
+  const outsN = cd.n.filter(e=>e[0]===selSym), outsX = cd.x.filter(e=>e[0]===selSym);
+  const ins = cd.n.filter(e=>e[1]===selSym);
+  dtitle.textContent = t('detail.symbol');
+  dbody.innerHTML = `<div class="path">${esc(F[fileFocus].p)}</div>
+    <strong class="sym">${esc(selSym)}</strong>
+    <div><button class="opensym" data-tree="sym">${esc(t('detail.call_tree_here'))}</button></div>
+    <h3>${esc(t('detail.calls', {n: outsN.length + outsX.length}))}</h3><ul>` +
+    outsN.map(e=>`<li class="sym"><a class="symlink" data-selsym="${esc(e[1])}">${esc(e[1])}</a> <span class="muted">:${e[2]}</span></li>`).join('') +
+    outsX.map(e=>`<li class="sym">${esc(e[2])} <span class="muted">${esc(t('detail.in'))}</span> <a class="filelink" data-openfile="${e[1]}">${esc(baseName(F[e[1]].p))}</a> <span class="muted">:${e[3]}</span></li>`).join('') +
+    `</ul><h3>${esc(t('detail.called_by', {n: ins.length}))}</h3><ul>` +
+    ins.map(e=>`<li class="sym"><a class="symlink" data-selsym="${esc(e[0])}">${esc(e[0])}</a> <span class="muted">:${e[2]}</span></li>`).join('') + `</ul>`;
+}
+function entryDetail(j){
+  const ep = ENTRY_POINTS[j], f = F[ep.i];
+  dtitle.textContent = t('detail.entry_point');
+  dbody.innerHTML = `<strong>${esc(ep.label)}</strong>
+    <div class="muted">${esc(t('kind.' + ep.kind))}</div>` +
+    (ep.symbol ? `<div class="sym">${esc(ep.symbol)}</div>` : '') +
+    `<div class="path">${esc(f.p)}</div>
+    <div class="sym">${fileLink(ep.i)}</div>`;
+}
+dbody.addEventListener('change', e=>{
+  const sel = e.target.closest('[data-stsel]');
+  if (sel && activeUC >= 0){
+    const u = UCS[activeUC];
+    const next = sel.value;
+    if (next === canonStatus(u.status)) delete stOverrides[u.name];
+    else stOverrides[u.name] = next;
+    saveSt(); refreshUCChips(); setUC(activeUC);
+  }
+});
+dbody.addEventListener('click', e=>{
+  const su = e.target.closest('[data-setuc]');
+  if (su){ setUC(+su.dataset.setuc); return; }
+  const ct = e.target.closest('[data-tree]');
+  if (ct){
+    // launcher of the Flow scene from the symbols scene: file level, or one symbol of it
+    treeRoot = {i: fileFocus, symbol: ct.dataset.tree === 'sym' ? selSym : null};
+    activeEp = -1;
+    go('flow');
+    return;
+  }
+  const a = e.target.closest('[data-go]');
+  if (a){ const i = +a.dataset.go; if (scene!=='pac') go('pac'); selectFile(i); centerOn(i); return; }
+  const o = e.target.closest('[data-open]');
+  if (o){ go('file', {i:+o.dataset.open}); return; }
+  const of2 = e.target.closest('[data-openfile]');
+  if (of2){ go('file', {i:+of2.dataset.openfile}); return; }
+  const ss = e.target.closest('[data-selsym]');
+  if (ss){ selSym = ss.dataset.selsym; paintFileEdges(); symDetail(); return; }
+  const hr = e.target.closest('[data-hop]');
+  if (hr){ const i = +hr.dataset.hop; if (scene!=='pac') go('pac'); selected = i; paintState(); centerOn(i); }
+});
+
+// ==================== use-cases panel ====================
+document.getElementById('ucn').textContent = UCS.length;
+// collapsible section (same pattern as the entry-points header); open by default, not persisted
+document.getElementById('uchdr').addEventListener('click', function(){
+  this.classList.toggle('closed');
+  const w = document.getElementById('ucwrap');
+  w.hidden = !w.hidden;
+});
+uclist.innerHTML = UCS.map((u,j)=>
+  `<button class="uc" data-j="${j}">${esc(u.name)}<br><span class="actor">${esc(u.actor)}</span>` +
+  (u.seam ? `<span class="badge">${esc(t('badge.seam'))}</span>` : '') +
+  `<span class="st ${esc(ucStatus(u))}">${esc(ucStatus(u))}</span></button>`).join('');
+function refreshUCChips(){
+  uclist.querySelectorAll('.uc').forEach((el,i)=>{
+    const chip = el.querySelector('.st');
+    if (chip){ chip.className = 'st ' + ucStatus(UCS[i]); chip.textContent = ucStatus(UCS[i]); }
+  });
+  // local drafts visible without opening one use-case at a time: a counter on the export button
+  const btn = document.querySelector('#sidebar [data-exportst]');
+  if (btn){
+    const n = Object.keys(stOverrides).length;
+    btn.textContent = n ? t('uc.export_n', {n}) : t('uc.export');
+  }
+}
+uclist.addEventListener('click', e=>{
+  const b = e.target.closest('.uc'); if (!b) return;
+  const j = +b.dataset.j;
+  setUC(j === activeUC ? -1 : j);
+});
+function setUC(j){
+  activeUC = j;
+  uclist.querySelectorAll('.uc').forEach((el,i)=> el.classList.toggle('active', i===j));
+  ucclear.hidden = j < 0;
+  if (j >= 0){
+    if (scene === 'file') go('pac');
+    const u = UCS[j];
+    dtitle.textContent = t('detail.usecase');
+    const order = new Map();
+    u.hops.forEach(h=>{ if(pos[h.i] && !order.has(h.i)) order.set(h.i, order.size+1); });
+    const st = ucStatus(u);
+    dbody.innerHTML = `<strong>${esc(u.name)}</strong>
+      <div class="muted">${esc(u.actor)}${u.seam ? ' · ' + esc(t('detail.seam')) : ''}</div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <select class="stsel st ${esc(st)}" data-stsel title="${esc(t('detail.status_title'))}">` +
+        ST_CYCLE.map(s0=>`<option value="${s0}"${s0===st?' selected':''}>${s0}</option>`).join('') +
+        `</select>${stOverrides[u.name] ? `<span class="muted" style="font-size:.65rem">${esc(t('detail.local'))}</span>` : ''}</div>
+      <p style="font-size:.78rem">${esc(u.goal)}</p>
+      <h3>${esc(t('detail.hops', {n:u.hops.length}))}</h3>` +
+      u.hops.map(h=>`<div class="hoprow" data-hop="${h.i}">
+          <span class="hopn">${order.get(h.i)||'·'}</span>
+          <span><span class="hr-sym">${esc(baseName(F[h.i].p))}${h.s? ' : '+esc(h.s):''}</span><br>
+          <span class="hr-role">${esc(h.r)}</span></span></div>`).join('') +
+      (u.rules.length ? `<h3>${esc(t('detail.rules'))}</h3><div class="sym muted">${esc(u.rules.join(', '))}</div>` : '');
+  } else if (selected < 0){
+    dtitle.textContent = t('detail.title');
+    dbody.innerHTML = `<div class="empty">${esc(t('detail.empty_short'))}</div>`;
+  }
+  render();
+}
+ucclear.onclick = ()=> setUC(-1);
+function exportStatus(){
+  const eff = {};
+  UCS.forEach(u=>{ if (stOverrides[u.name]) eff[u.name] = stOverrides[u.name]; });
+  dtitle.textContent = t('export.title');
+  dbody.innerHTML = `<p style="font-size:.78rem">${esc(t('export.body', {n: Object.keys(eff).length}))}</p>
+    <textarea readonly style="width:100%;height:220px;background:var(--panel-2);color:var(--ink);border:1px solid var(--line);border-radius:8px;font-family:'IBM Plex Mono',monospace;font-size:.68rem;padding:8px">${esc(JSON.stringify(eff, null, 1))}</textarea>`;
+  const ta = dbody.querySelector('textarea'); if (ta){ ta.focus(); ta.select(); }
+}
+document.querySelector('#sidebar [data-exportst]').addEventListener('click', exportStatus);
+
+// ==================== entry points panel ====================
+// grouped by kind; the whole section (header included) disappears when the map has none
+if (ENTRY_POINTS.length){
+  ephdr.hidden = false;
+  document.getElementById('epn').textContent = ENTRY_POINTS.length;
+  let html = '';
+  for (const kind of KINDS){
+    const group = ENTRY_POINTS.map((ep,j)=>({ep, j})).filter(o=>o.ep.kind === kind);
+    if (!group.length) continue;
+    html += `<div class="kindhdr">${esc(t('kind.' + kind))} · ${group.length}</div>`;
+    html += group.map(o=>
+      `<button class="ep" data-ep="${o.j}">${esc(o.ep.label)}<br><span class="vw">` +
+      esc((o.ep.symbol ? o.ep.symbol + ' · ' : '') + baseName(F[o.ep.i].p)) +
+      `</span></button>`).join('');
+  }
+  eplist.innerHTML = html;
+}
+ephdr.addEventListener('click', function(){
+  this.classList.toggle('closed');
+  eplist.hidden = !eplist.hidden;
+});
+eplist.addEventListener('click', e=>{
+  const b = e.target.closest('[data-ep]'); if (!b) return;
+  activeEp = +b.dataset.ep;
+  treeRoot = null;
+  const ep = ENTRY_POINTS[activeEp];
+  if (scene === 'ctx'){ render(); }   // Context: the entry point becomes a lens
+  else {
+    if (scene !== 'pac') go('pac'); else render();
+    selected = ep.i; paintState(); centerOn(ep.i);
+  }
+  entryDetail(activeEp);
+});
+
+// ==================== stars panel (most central files) ====================
+// top 20 by ucCount desc, ties by impIn desc; muted categories (tests) stay out of the ranking
+const starRank = F.map((_,i)=>i)
+  .filter(i=> !isMutedCat(F[i].g))
+  .sort((a,b)=> ucCount[b]-ucCount[a] || impIn[b]-impIn[a])
+  .slice(0, 20);
+document.getElementById('starn').textContent = starRank.length;
+document.getElementById('starlist').innerHTML = starRank.map(i=>
+  `<button class="star" data-star="${i}" title="${esc(F[i].p)}">
+    <span class="dot" style="background:${CATCOLOR(F[i].g)}"></span>${esc(baseName(F[i].p))}<br>
+    <span class="starnums">${esc(t('star.stats', {uc:ucCount[i], total:UCS.length, imp:impIn[i], calls:callIn[i]}))}</span></button>`).join('');
+document.getElementById('starhdr').addEventListener('click', function(){
+  this.classList.toggle('closed');
+  const l = document.getElementById('starlist');
+  l.hidden = !l.hidden;
+});
+document.getElementById('starlist').addEventListener('click', e=>{
+  const b = e.target.closest('[data-star]'); if (!b) return;
+  const i = +b.dataset.star;
+  if (scene !== 'pac') go('pac');
+  selectFile(i); centerOn(i);
+});
+
+// ==================== search ====================
+const searchIndex = [];
+F.forEach((f,i)=>{
+  searchIndex.push({k:'file', t:f.p, i, sym:null});
+  f.c.forEach(c=>{ searchIndex.push({k:'class', t:c[0]+' — '+f.p, i, sym:null});
+    c[3].forEach(m=> searchIndex.push({k:'method', t:c[0]+'.'+m+' — '+f.p, i, sym:m})); });
+  f.f.forEach(x=> searchIndex.push({k:'function', t:x[0]+' — '+f.p, i, sym:x[0]}));
+});
+input.addEventListener('input', ()=>{
+  const q = input.value.trim().toLowerCase();
+  searchHits = new Set();
+  if (q.length < 2){ results.style.display='none'; paintState(); return; }
+  const hits = [];
+  for (const e of searchIndex){
+    if (e.t.toLowerCase().includes(q)){ hits.push(e); if (hits.length > 400) break; }
+  }
+  hits.forEach(h=>{ if (pos[h.i]) searchHits.add(h.i); });
+  results.innerHTML = hits.slice(0,12).map((h,z)=>
+    `<button data-z="${z}"><span class="k">${esc(t('search.kind.' + h.k))}</span>${esc(h.t)}</button>`).join('') ||
+    `<button disabled><span class="k">—</span>${esc(t('search.none'))}</button>`;
+  results.style.display = 'block';
+  results._hits = hits;
+  paintState();
+});
+results.addEventListener('click', e=>{
+  const b = e.target.closest('button[data-z]'); if (!b) return;
+  const h = results._hits[+b.dataset.z];
+  results.style.display = 'none';
+  if (!visible(h.i)){ document.getElementById('tgtests').checked = true; showMuted = true; }
+  if (h.sym){ go('file', {i:h.i, sym:h.sym}); symDetail(); }
+  else { if (scene!=='pac') go('pac'); else render(); selectFile(h.i); centerOn(h.i); }
+});
+document.addEventListener('pointerdown', e=>{
+  if (!results.contains(e.target) && e.target !== input) results.style.display = 'none';
+});
+
+// ==================== legend and toggles ====================
+document.getElementById('legend').innerHTML = CATS.map(c=>
+  `<span class="chip"><span class="sw" style="background:${catInfo.get(c.id).color}"></span>${esc(catInfo.get(c.id).label)}</span>`).join('');
+const mutedCats = CATS.filter(c=>c.muted);
+if (mutedCats.length){
+  document.getElementById('mutedtgl').hidden = false;
+  // the label comes from the config categories, so it is not part of UI_STRINGS
+  document.getElementById('mutedlabel').textContent = mutedCats.map(c=>(c.label||c.id).toLowerCase()).join(' + ');
+}
+document.getElementById('tgtests').addEventListener('change', e=>{
+  showMuted = e.target.checked; render(); fit();
+});
+document.getElementById('tgstars').addEventListener('change', e=>{
+  showStars = e.target.checked;
+  if (scene === 'pac') render();
+});
+
+// ==================== boot ====================
+fillStaticStrings();
+dtitle.textContent = t('detail.title');
+document.getElementById('commitline').textContent =
+  `${META.repo || ''} @ ${META.commit || '?'} · ${META.date || ''}`;
+refreshUCChips();
+render();
+fit();
+window.addEventListener('resize', fit);
+})();
+</script>

@@ -1,0 +1,101 @@
+NOTICE — matryoshker-extractor
+
+This package is a minimal derivative of the phase-1 (deterministic
+structural extraction) portion of the Understand-Anything project, by
+Egonex-AI (https://github.com/Egonex-AI/Understand-Anything), licensed
+under MIT (copyright (c) 2026 Yuxiang Lin; (c) 2026 Infinite Universe,
+Inc.). The full upstream license text is in LICENSE-UA.
+
+Origin commit: ba450c43425f3de6d43daf76526950ad8ca93536 (2026-08-26).
+
+Files derived from upstream
+----------------------------
+
+1. Four scripts, BYTE-IDENTICAL to
+   understand-anything-plugin/skills/understand/ at the commit above
+   (verified with cmp):
+     - scan-project.mjs
+     - extract-import-map.mjs
+     - extract-structure.mjs
+     - extract-structure-result.mjs
+
+2. vendor/core — the @understand-anything/core package:
+     - vendor/core/dist: JavaScript built (tsc) from the upstream
+       TypeScript source (understand-anything-plugin/packages/core) at
+       the same commit; the .ts source itself is not redistributed
+       here.
+     - vendor/core/package.json: a copy of the upstream file with ONE
+       single patch: the 2 "workspace:*" dependencies
+       (@understand-anything/tree-sitter-dart-wasm and
+        @understand-anything/tree-sitter-swift-wasm) became
+       "file:../tree-sitter-dart-wasm" / "file:../tree-sitter-swift-wasm",
+       and devDependencies + scripts were removed. No other change.
+
+3. vendor/tree-sitter-dart-wasm and vendor/tree-sitter-swift-wasm:
+   byte-identical copies of understand-anything-plugin/packages/
+   {tree-sitter-dart-wasm,tree-sitter-swift-wasm} (tree-sitter grammars
+   compiled to WASM; their own licenses live inside each directory,
+   where present).
+
+Files original to this package (not derived): extract.mjs (CLI
+wrapper), golden_check.py (acceptance comparator), package.json,
+package-lock.json, NOTICE, .gitignore.
+
+Third-party grammar licenses
+-----------------------------
+
+The redistributed vendor/ tree is kept byte-identical to upstream (see
+the re-vendoring procedure below), so the attributions that upstream
+does not carry in-tree are recorded here instead of by editing those
+files:
+
+- @understand-anything/core (vendor/core): MIT, copyright (c) 2026
+  Yuxiang Lin and (c) 2026 Infinite Universe, Inc. Its package.json has
+  no "license" field upstream — automated license audits therefore
+  report it as UNKNOWN — but it is covered by the same MIT grant as the
+  rest of Understand-Anything, whose full text is in LICENSE-UA.
+
+- tree-sitter-dart (vendor/tree-sitter-dart-wasm/tree-sitter-dart.wasm):
+  MIT, as declared by the upstream npm package tree-sitter-dart@1.0.0
+  (publisher: amaanq); consult that package for the copyright holders.
+  The wasm shipped here is a rebuild of that release's unmodified
+  grammar — see vendor/tree-sitter-dart-wasm/BUILD.md for why and how.
+  The upstream tarball carries no LICENSE file, which is why the grant
+  is recorded here.
+
+- tree-sitter-swift (vendor/tree-sitter-swift-wasm/tree-sitter-swift.wasm):
+  MIT, copyright (c) 2021 alex-pinkus. The full license text ships with
+  the package, in vendor/tree-sitter-swift-wasm/LICENSE.
+
+The remaining grammars are ordinary npm dependencies installed by
+`npm ci --ignore-scripts`; their licenses come with them under
+node_modules/ and are not redistributed by this repository.
+
+What is NOT included
+---------------------
+
+- Understand-Anything's LLM/agent phase (SKILL.md, agents/,
+  compute-batches, merge-batch-graphs, fingerprints, locales, etc.).
+- The dashboard and the viewer.
+- Any runtime network call: extraction runs 100% locally (node +
+  tree-sitter/WASM); npm is only used once, to install the
+  vendored/public dependencies (npm install --ignore-scripts).
+
+Re-vendoring procedure (updating to a new upstream commit)
+------------------------------------------------------------
+
+1. Clone https://github.com/Egonex-AI/Understand-Anything at the
+   desired commit.
+2. Diff the 4 .mjs files under skills/understand/ against the ones
+   here; if they changed, copy them byte-identical (never edit them
+   locally — any adaptation belongs in the extract.mjs wrapper).
+3. Rebuild core: in understand-anything-plugin/packages/core, install
+   deps and run `tsc` (the "build" script); copy the resulting dist/
+   into vendor/core/dist, and package.json with the same single patch
+   described above.
+4. Re-copy packages/tree-sitter-{dart,swift}-wasm if they changed.
+5. Run `npm install --ignore-scripts`, then the golden test:
+   `node extract.mjs <repo> --out golden-run ...` + `python
+   golden_check.py` against known reference outputs.
+6. Update the commit hash/date in this NOTICE, and LICENSE-UA if the
+   upstream text changed.

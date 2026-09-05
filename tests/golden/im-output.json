@@ -1,0 +1,81 @@
+{
+  "scriptCompleted": true,
+  "stats": {
+    "filesScanned": 25,
+    "filesWithImports": 13,
+    "totalEdges": 33
+  },
+  "importMap": {
+    "catalog/__init__.py": [],
+    "catalog/models.py": [],
+    "catalog/serializers.py": [
+      "catalog/models.py",
+      "catalog/services/catalog_service.py"
+    ],
+    "catalog/services/__init__.py": [],
+    "catalog/services/catalog_service.py": [
+      "catalog/models.py"
+    ],
+    "catalog/urls.py": [
+      "catalog/views.py"
+    ],
+    "catalog/views.py": [
+      "catalog/serializers.py",
+      "catalog/services/catalog_service.py",
+      "lending/handlers/place_reservation.py",
+      "lending/services/loan_service.py"
+    ],
+    "lending/__init__.py": [],
+    "lending/domain/__init__.py": [],
+    "lending/domain/policies.py": [],
+    "lending/handlers/__init__.py": [],
+    "lending/handlers/place_reservation.py": [
+      "catalog/services/catalog_service.py",
+      "lending/domain/policies.py",
+      "lending/models.py",
+      "lending/services/loan_service.py"
+    ],
+    "lending/handlers/return_book.py": [
+      "lending/domain/policies.py",
+      "lending/models.py",
+      "lending/services/loan_service.py",
+      "lending/services/overdue_service.py",
+      "lending/tasks/notify_overdue.py"
+    ],
+    "lending/models.py": [
+      "catalog/models.py",
+      "lending/domain/policies.py"
+    ],
+    "lending/services/__init__.py": [],
+    "lending/services/loan_service.py": [
+      "lending/domain/policies.py",
+      "lending/models.py"
+    ],
+    "lending/services/overdue_service.py": [
+      "lending/domain/policies.py",
+      "lending/models.py",
+      "lending/tasks/notify_overdue.py"
+    ],
+    "lending/tasks/__init__.py": [],
+    "lending/tasks/notify_overdue.py": [
+      "lending/domain/policies.py",
+      "lending/models.py"
+    ],
+    "library/__init__.py": [],
+    "library/settings.py": [],
+    "library/urls.py": [
+      "catalog/views.py"
+    ],
+    "manage.py": [],
+    "tests/test_lending_flows.py": [
+      "lending/domain/policies.py",
+      "lending/handlers/place_reservation.py",
+      "lending/services/loan_service.py",
+      "lending/services/overdue_service.py",
+      "lending/tasks/notify_overdue.py"
+    ],
+    "tests/test_policies.py": [
+      "lending/domain/policies.py"
+    ]
+  }
+}
