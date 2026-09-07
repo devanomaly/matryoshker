@@ -2,6 +2,34 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- **Packages scene used a sliver of the canvas and its cluster labels overlapped.** The
+  clusters were shelf-packed against a hardcoded 1500-unit width, so a typical repo
+  produced a single horizontal row (the bundled demo measured 832 × 79 world units,
+  a 10.5:1 strip), and the cluster label was drawn with no width constraint, running
+  over the neighbouring cluster's label (up to 47px on the bundled demo). Clusters are
+  now packed into a compact grid whose shelf width is derived from the packed content
+  (total area × a target aspect ratio), each box is as wide as the wider of its node
+  grid and its label, and a label that still does not fit is clipped with an ellipsis
+  and carries the full name as a tooltip. The bundled demo now measures 464 × 340
+  (1.37:1) with no overlap; a synthetic 457-file, 41-cluster repository measures 1.24:1
+  instead of 3.41:1, with its worst label overrun down from 122px to zero.
+- **Context scene** was packed against its own hardcoded 900-unit width (a 4.8:1 strip
+  for the demo, a 0.5:1 column for a large repo); it now uses the same content-derived
+  packing (1.66:1 and 1.38:1 respectively) and sizes its boxes with the same
+  deterministic text estimate, which also keeps localized file counts and long or East
+  Asian folder names clear of the hide-folder `×`.
+
+### Note for existing maps
+
+Cluster base positions changed, so a saved arrangement (`mtk:<repo>@<commit>:pos`, kept
+per commit) will appear moved on an existing map. Node dragging, the per-use-case
+Packages arrangement, the hidden-folder list and the status drafts are unaffected and
+their `localStorage` keys are unchanged.
+
 ## [1.4.0] - 2026-09-05
 
 First public release.
