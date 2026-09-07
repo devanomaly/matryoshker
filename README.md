@@ -42,7 +42,9 @@ More:
   viewer has no theme switch of its own);
 
 all in a single self-contained HTML file (CSP-safe, no external dependencies besides the
-Google Fonts `<link>`).
+Google Fonts `<link>`). That `<link>` is the page's only network request: block it, or
+open the file offline, and the map still works in full — only the typefaces fall back to
+the system stack.
 
 ## 60-second demo
 

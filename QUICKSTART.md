@@ -141,7 +141,10 @@ is not Django/DRF — not an error on its own.
 ## Open the result
 
 `matryoshker.html` is self-contained — open it in a browser, serve it statically, or
-publish it as a Claude Artifact. No server, no network, no keys required at runtime.
+publish it as a Claude Artifact. No server, no build step, no keys required at runtime. The
+page makes exactly one external request, the Google Fonts `<link>` in its `<head>`; offline
+or behind a CSP that blocks it, the map is fully functional and falls back to the system
+fonts.
 
 It opens in **Packages**; *Context* goes up one level, double-clicking a file goes down
 to **Symbols**, and **Flow** appears in the breadcrumb once a use-case or entry point is

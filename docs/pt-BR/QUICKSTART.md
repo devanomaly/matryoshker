@@ -86,7 +86,9 @@ específico desses) — não é erro seu.
 ## 4. Abrir
 
 `matryoshker.html` é autocontido — abra no browser, sirva estático ou publique como
-Claude Artifact. Sem servidor, sem rede, sem chaves.
+Claude Artifact. Sem servidor, sem build, sem chaves. A página faz exatamente uma
+requisição externa, o `<link>` do Google Fonts no `<head>`; offline ou atrás de uma CSP
+que a bloqueie, o mapa funciona por completo e as fontes caem para as do sistema.
 
 Abre em **Pacotes**; *Contexto* sobe um nível, duplo-clique num arquivo desce para
 **Símbolos**, e **Fluxo** aparece na migalha quando há UC ou endpoint ativo. Esc sobe um

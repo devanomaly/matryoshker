@@ -884,6 +884,11 @@ python pipeline/inject.py --template viewer/template.html --data out/data.json \
 The viewer is repo-agnostic and reads only the embedded object of 8.1. This section is
 the contract the viewer implementation follows.
 
+The page issues exactly **one** external request: the Google Fonts `<link>` in its
+`<head>`. The viewer MUST stay fully functional when that request fails (offline, or a
+host CSP that blocks it) — every `font-family` declaration ends in a generic fallback and
+no script, style or data comes from the network.
+
 ### 13.1 `meta` keys the viewer needs
 
 `repo`, `commit`, `date` (header: `<repo> @ <commit> · <date>`), `lang` (13.2),
@@ -915,6 +920,7 @@ substituted by the viewer. Keys and texts:
 | `kind.other` | `Other` | `Outros` |
 | `panel.stars` | `Stars` | `Estrelas` |
 | `star.stats` | `UC {uc}/{total} · imp {imp} · calls {calls}` | `UC {uc}/{total} · imp {imp} · cham {calls}` |
+| `stars.none` | `No file qualifies yet — a file appears here once a use-case, an import or a call points at it.` | `Nenhum arquivo se qualifica ainda — um arquivo aparece aqui quando um use-case, um import ou uma chamada aponta para ele.` |
 | `panel.usecases` | `Use-cases` | `Use-cases` |
 | `badge.seam` | `seam` | `seam` |
 | `uc.clear` | `clear selection (Esc)` | `limpar seleção (Esc)` |
@@ -982,7 +988,9 @@ a `localStorage` key, so it MUST be the same string in every language.
 ### 13.3 Entry points panel
 
 - Reads `DATA.entry_points` (default `[]`). When the array is empty the whole section
-  (header and list) is hidden — not collapsed, absent from the layout.
+  (header and list) is hidden — not collapsed, absent from the layout. When it is
+  non-empty the section is rendered **open** (the header carries no `closed` class and
+  the list is visible); clicking the header collapses and re-expands it.
 - Grouped by `kind` in the order of `KINDS` (`http`, `command`, `event`, `cli`, `cron`,
   `other`), each group with a small heading `UI_STRINGS['kind.<kind>']` and its count;
   groups with no entries are not rendered. Entries keep the order of the array.
@@ -1023,6 +1031,31 @@ Context.
   Portuguese values simply stop applying).
 - The export snippet is `{ "<name>": "<canonical status>" }`.
 - `localStorage` keys are unchanged: `mtk:<repo>@<commit>:pos`, `:st`, `:hidef`.
+
+### 13.6 Stars panel
+
+The panel ranks the files something else points at ("most central"). It is derived
+entirely from the embedded object; the pipeline computes nothing for it.
+
+- Candidates are all files whose category is not `muted` (3.2).
+- A candidate **qualifies** only when at least one of the three centralities is non-zero:
+  `ucCount` (use-cases whose hops touch the file, derived from `ucs`), `impIn` (inbound
+  edges in `imports`), `callIn` (inbound cross-file edges in `calls`). A file nothing
+  points at never appears, whatever the list length.
+- Qualifying files are sorted by `ucCount` desc, then `impIn` desc, then `callIn` desc;
+  the sort is stable, so files equal on all three keep file order. At most **20** rows
+  are rendered.
+- The badge shows the number of rows actually rendered (never a padded 20).
+- A row shows the file's base name; when a base name repeats inside the rendered list the
+  row shows `<parent folder>/<base name>` instead, and the full path when that still
+  repeats. The row's `title` is always the full path. A label too long for the panel wraps
+  inside its row instead of overflowing it.
+- When nothing qualifies — a legitimate state for a repository with no use-case registry
+  yet and no resolvable imports or calls — the section stays visible with badge `0` and
+  the list holds the single message `UI_STRINGS['stars.none']`.
+- Clicking a row goes to Packages, selects and centers that file. The `stars` header
+  toggle (halos in the Packages scene) is a separate feature driven by `ucCount` for
+  every file and is not affected by the panel's filter.
 
 ---
 

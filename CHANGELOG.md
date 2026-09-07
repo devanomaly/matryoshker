@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- **Stars panel**: a file now needs at least one use-case, one inbound import or one inbound
+  call to be listed; the list is no longer padded to 20 with all-zero files, and the badge
+  counts what is shown. Rows whose base name repeats show their parent folder. When nothing
+  qualifies the panel says so instead of showing an empty box, and a long label wraps
+  inside its row instead of overflowing the panel.
+- **Entry points panel** starts expanded when the map has entry points (it stays completely
+  hidden when it has none).
+- **Docs**: README, QUICKSTART, CONTRIBUTING and their Portuguese mirrors under
+  `docs/pt-BR/` now state that the generated page makes exactly one external request — the
+  Google Fonts `<link>` — and works fully without it.
+
 ## [1.4.0] - 2026-09-05
 
 First public release.
