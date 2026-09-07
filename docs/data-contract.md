@@ -990,28 +990,54 @@ a `localStorage` key, so it MUST be the same string in every language.
   `files[i].p`.
 - Clicking an entry sets it active (`activeEp`): in the Context scene the lens dims
   every cluster outside the BFS-depth-2 reach of `entry_points[activeEp].i` and labels
-  the entry cluster with the entry's `label`; in the other scenes the viewer goes to
-  Packages, selects and centers file `i`. The crumb `crumb.entry_point` (with the
-  label) clears it. The Flow scene shows the call tree rooted at `i` titled
-  `flow.call_tree_title` with `label = "<label> · <symbol>"` (or just `<label>` when
-  `symbol` is null).
+  the entry cluster with the entry's `label`; in the Flow scene it becomes the Flow
+  source (13.4) and the scene is redrawn in place; in the other scenes the viewer goes
+  to Packages, selects and centers file `i`. Choosing an entry point clears `treeRoot`
+  and leaves an active use-case untouched (13.4). The crumb `crumb.entry_point` (with
+  the label) clears `activeEp` entirely — the lens, the sidebar highlight and, when the
+  entry point was the Flow source, the Flow drawing, which then falls back (13.4).
+  While the entry point is the Flow source, the Flow scene shows the call tree rooted at
+  `i` titled `flow.call_tree_title` with `label = "<label> · <symbol>"` (or just
+  `<label>` when `symbol` is null).
 - The detail panel for an active entry point (title `detail.entry_point`) shows
   label, kind, symbol and the file link.
 
-### 13.4 Call tree launcher
+### 13.4 Flow source and the call tree launcher
+
+Two selections can be active at the same time: the use-case overlay (`activeUC`) and at
+most one call-tree root — either an entry point (`activeEp`, 13.3) or a root launched
+from the Symbols scene (`treeRoot`). The two call-tree roots replace each other: setting
+one clears the other. The use-case overlay is independent of both, because the Context
+scene deliberately combines them (13.3: the entry-point lens wins over the use-case
+overlay there).
+
+The Flow scene draws exactly one of them: the one chosen LAST. `flowPick`
+(`'uc' | 'ep' | 'tree' | null`) records that choice; it is set when a use-case, an entry
+point or a tree root is chosen, and it is not persisted. Before every render the viewer
+re-points it at a selection that is still active: a `flowPick` naming a selection that has
+been cleared falls back to whichever selection survives (entry point, then tree root, then
+use-case), and to `null` when none does. The Flow crumb is visible exactly when
+`flowPick !== null`, and `flowPick === null` is what draws `flow.empty`. Changing the Flow
+source while the Flow scene is open redraws it and refits the view so the new chain or
+tree is on screen; re-rendering the same source (a status change, for example) keeps the
+current zoom and pan. Changing the status of the active use-case repaints its detail
+panel and never changes the Flow source. The refit is recorded as done only once it
+could actually be applied, so a Flow drawn while the map has no layout width (a hidden
+or zero-sized container) is refitted on the next render instead of staying off-screen.
 
 State `treeRoot = {i, symbol|null} | null`. The Symbols scene detail panel (file header
 and, when a symbol is selected, the symbol panel) offers a button
-`detail.call_tree_here` that sets `treeRoot` from the open file (and the selected
-symbol, if any) and opens the Flow scene. The Flow crumb is visible whenever
-`activeUC >= 0 || activeEp >= 0 || treeRoot`. Rendering precedence in Flow: active
-use-case (hop chain) → active entry point (tree from its `i`) → `treeRoot` (tree from
-`treeRoot.i`). When `treeRoot.symbol` is set, the root's children are the targets of
-`calls[i].x` edges whose caller equals the symbol (deeper levels are file-level, as for
-entry points). The crumb `crumb.call_tree` (label = base name, `:symbol` appended when
-present) clears `treeRoot`. The Esc order becomes: search results → selected symbol →
-Symbols/Flow scene → entry point or tree root → selected file → active use-case →
-Context.
+`detail.call_tree_here` that sets `treeRoot` from the open file (and the selected symbol,
+if any), clears `activeEp`, makes the tree the Flow source and opens the Flow scene. When
+`treeRoot.symbol` is set, the root's children are the targets of `calls[i].x` edges whose
+caller equals the symbol (deeper levels are file-level, as for entry points). The crumb
+`crumb.call_tree` (label = base name, `:symbol` appended when present) clears `treeRoot`;
+Flow then falls back to the active use-case, if there is one.
+
+The Esc order does not depend on the Flow source and stays: search results → selected
+symbol → Symbols/Flow scene → entry point or tree root → selected file → active use-case →
+Context. `flowPick` is never an Esc rung of its own — Esc clears selections, and the Flow
+source follows whatever is left.
 
 ### 13.5 Use-cases and status
 

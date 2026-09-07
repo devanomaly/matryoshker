@@ -521,6 +521,8 @@ let selSym = null;          // symbols scene: selected symbol
 let activeEp = -1;          // index of the active entry point (lens in Context, focus elsewhere)
 let treeRoot = null;        // {i, symbol|null}: call tree opened from the symbols scene
 let activeUC = -1;          // index of the active use-case
+let flowPick = null;        // 'uc' | 'ep' | 'tree' | null: selection the Flow scene draws
+let flowDrawn = '';         // signature of the Flow drawing on screen (refit when it changes)
 let selected = -1;          // packages scene: selected file
 let showMuted = false;      // show muted categories (tests, typically)
 let showStars = false;      // packages scene: centrality halos (toggle "stars"; not persisted)
@@ -621,8 +623,22 @@ function layoutPac(){
   return cls;
 }
 
+// ==================== flow source ====================
+// The use-case overlay and the entry-point lens are meant to coexist (Context combines
+// them), so the Flow scene follows the selection made LAST instead of a fixed
+// precedence. `flowPick` is that pointer; this resolver keeps it on a selection that is
+// still active. Pure on purpose (arguments only): it is unit-tested outside the browser.
+function resolveFlowPick(pick, live){
+  if (pick && live[pick]) return pick;
+  if (live.ep) return 'ep';
+  if (live.tree) return 'tree';
+  if (live.uc) return 'uc';
+  return null;
+}
+
 // ==================== renders (pac / ctx / file / flow) ====================
 function render(){
+  flowPick = resolveFlowPick(flowPick, {uc: activeUC >= 0, ep: activeEp >= 0, tree: !!treeRoot});
   symPos = new Map(); stubPos = new Map();
   if (scene === 'pac') renderPac();
   else if (scene === 'ctx') renderCtx();
@@ -631,7 +647,7 @@ function render(){
   document.getElementById('bctx').classList.toggle('on', scene==='ctx');
   document.getElementById('bpac').classList.toggle('on', scene==='pac');
   const bfl = document.getElementById('bflow');
-  bfl.hidden = !(activeUC >= 0 || activeEp >= 0 || treeRoot);
+  bfl.hidden = flowPick === null;
   bfl.classList.toggle('on', scene==='flow');
   const bf = document.getElementById('bfile');
   bf.hidden = scene !== 'file';
@@ -919,10 +935,10 @@ function callTreeSvg(rootI, rootSym){
   })(root);
   return s;
 }
-// precedence in the Flow scene: active use-case > active entry point > call tree root
+// the Flow scene draws whichever selection `flowPick` names (the most recent one)
 function renderFlow(){
   let s = '';
-  if (activeUC >= 0){
+  if (flowPick === 'uc'){
     // use-case flow: hops in a vertical column
     const u = UCS[activeUC];
     const W = 470, X = 0;
@@ -940,13 +956,13 @@ function renderFlow(){
       y += 64;
     });
     s = `<text class="classhdr" x="0" y="-18">${esc(u.name)}</text>` + s;
-  } else if (activeEp >= 0){
+  } else if (flowPick === 'ep'){
     // entry point: call tree from the file where execution enters
     const ep = ENTRY_POINTS[activeEp];
     const label = ep.label + (ep.symbol ? ' · ' + ep.symbol : '');
     s = `<text class="classhdr" x="0" y="0">${esc(t('flow.call_tree_title', {label, d: TREE_DEPTH}))}</text>` +
         callTreeSvg(ep.i, null);
-  } else if (treeRoot){
+  } else if (flowPick === 'tree'){
     // call tree launched from the symbols scene
     const label = baseName(F[treeRoot.i].p) + (treeRoot.symbol ? ' · ' + treeRoot.symbol : '');
     s = `<text class="classhdr" x="0" y="0">${esc(t('flow.call_tree_title', {label, d: TREE_DEPTH}))}</text>` +
@@ -955,6 +971,12 @@ function renderFlow(){
     s = `<text class="classhdr" x="0" y="0">${esc(t('flow.empty'))}</text>`;
   }
   world.innerHTML = s;
+  // a new Flow source replaces the whole drawing: refit so it is actually on screen
+  const sig = flowPick === 'uc' ? 'uc:' + activeUC
+            : flowPick === 'ep' ? 'ep:' + activeEp
+            : flowPick === 'tree' ? 'tree:' + treeRoot.i + ':' + (treeRoot.symbol || '')
+            : '';
+  if (sig !== flowDrawn && fit()) flowDrawn = sig;   // a bailed fit stays pending, and is retried
 }
 
 // ==================== scene navigation ====================
@@ -988,15 +1010,19 @@ document.addEventListener('keydown', e=>{
 
 // ==================== map interaction (pan / zoom / drag / hover / click) ====================
 function apply(){ world.setAttribute('transform', `translate(${tx},${ty}) scale(${k})`); }
+// Returns true when a transform was applied, false when there was nothing to fit yet
+// (no bounding box, or the SVG has no layout width — a hidden or zero-sized container).
+// The return value is additive: callers that ignore it behave exactly as before.
 function fit(){
   let bb;
-  try { bb = world.getBBox(); } catch(e){ return; }
+  try { bb = world.getBBox(); } catch(e){ return false; }
   const W = svg.clientWidth, H = svg.clientHeight;
-  if (!bb.width || !W) return;
+  if (!bb.width || !W) return false;
   k = Math.min(W/(bb.width+60), H/(bb.height+60), 2.2);
   tx = (W - bb.width*k)/2 - bb.x*k;
   ty = (H - bb.height*k)/2 - bb.y*k;
   apply();
+  return true;
 }
 function centerOn(i){
   const c = nodeCenter(i);
@@ -1166,7 +1192,7 @@ dbody.addEventListener('change', e=>{
     const next = sel.value;
     if (next === canonStatus(u.status)) delete stOverrides[u.name];
     else stOverrides[u.name] = next;
-    saveSt(); refreshUCChips(); setUC(activeUC);
+    saveSt(); refreshUCChips(); setUC(activeUC, {pick: false});   // repaint only
   }
 });
 dbody.addEventListener('click', e=>{
@@ -1177,6 +1203,7 @@ dbody.addEventListener('click', e=>{
     // launcher of the Flow scene from the symbols scene: file level, or one symbol of it
     treeRoot = {i: fileFocus, symbol: ct.dataset.tree === 'sym' ? selSym : null};
     activeEp = -1;
+    flowPick = 'tree';
     go('flow');
     return;
   }
@@ -1221,8 +1248,11 @@ uclist.addEventListener('click', e=>{
   const j = +b.dataset.j;
   setUC(j === activeUC ? -1 : j);
 });
-function setUC(j){
+// opts.pick === false repaints the panel for the use-case already active without
+// claiming the Flow source (the status-change refresh); a real selection omits it.
+function setUC(j, opts={}){
   activeUC = j;
+  if (j >= 0 && opts.pick !== false) flowPick = 'uc';
   uclist.querySelectorAll('.uc').forEach((el,i)=> el.classList.toggle('active', i===j));
   ucclear.hidden = j < 0;
   if (j >= 0){
@@ -1287,8 +1317,10 @@ eplist.addEventListener('click', e=>{
   const b = e.target.closest('[data-ep]'); if (!b) return;
   activeEp = +b.dataset.ep;
   treeRoot = null;
+  flowPick = 'ep';
   const ep = ENTRY_POINTS[activeEp];
-  if (scene === 'ctx'){ render(); }   // Context: the entry point becomes a lens
+  if (scene === 'ctx'){ render(); }        // Context: the entry point becomes a lens
+  else if (scene === 'flow'){ render(); }  // Flow: redraw as this entry point's call tree
   else {
     if (scene !== 'pac') go('pac'); else render();
     selected = ep.i; paintState(); centerOn(ep.i);

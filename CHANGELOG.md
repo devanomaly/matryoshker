@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+- **Fixed — the Flow scene now follows the selection you made last.** With a use-case
+  active, choosing an entry point (or *call tree from here* in the Symbols scene) updated
+  the crumb, the detail panel and the sidebar highlight while Flow kept drawing the
+  use-case chain. The use-case overlay and the entry-point lens still coexist everywhere
+  else — Context keeps its documented lens precedence — and clearing one makes Flow fall
+  back to the other. Clicking an entry point while the Flow scene is open now redraws Flow
+  in place instead of jumping to Packages, and a new Flow source refits the view. See
+  `docs/data-contract.md` section 13.4.
+
 ## [1.4.0] - 2026-09-05
 
 First public release.
