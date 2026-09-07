@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- **A route parser no longer erases a hand-written entry-point label.** Entry points that
+  land on the same file and symbol are now merged instead of collapsed onto the first
+  source: the label declared by a use-case wins over the one a parser generated, the
+  parser's route is kept in the new `route` field, and the new `ucs` field lists the
+  use-cases that enter there. The entry-points panel shows both, and the entry-point
+  detail links to each use-case. `meta.contract` stays `2` (see
+  `docs/data-contract.md` section 15.1).
+
 ## [1.4.0] - 2026-09-05
 
 First public release.

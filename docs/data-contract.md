@@ -430,15 +430,19 @@ points and no `urls.py`. The v1 `endpoints` key no longer exists.
 ### 6.1 Shape in the embedded object
 
 ```
-"entry_points": [ { "label": "/v1/books", "kind": "http", "i": 12, "symbol": "BookViewSet" } ]
+"entry_points": [ { "label": "POST /v1/books/{id}/borrow", "kind": "http", "i": 12,
+                    "symbol": "BookViewSet", "route": "/v1/books",
+                    "ucs": ["Member borrows a copy of a title"] } ]
 ```
 
 | Key | Type | Meaning |
 |---|---|---|
-| `label` | string, non-empty | What the panel shows. Route string for parsers (method-less, e.g. `/v1/books`), declared label or use-case name otherwise. |
+| `label` | string, non-empty | What the panel shows. A label a use-case author declared, when there is one; else the route a parser produced; else the use-case name. |
 | `kind` | `"http"` \| `"command"` \| `"event"` \| `"cli"` \| `"cron"` \| `"other"` | Group in the panel. |
 | `i` | integer, `0 <= i < nfiles` | File where execution enters. Everything the viewer does with an entry point starts from this index. |
 | `symbol` | string \| null | Declaring symbol (view class, handler, function) when known. |
+| `route` | string \| null | The route a parser produced for this entry point — its own, or the one of the class it is a method of. `null` when no parser contributed. Kept next to `label` so turning a parser on never destroys a written label. |
+| `ucs` | array of strings | Names of the use-cases this entry point belongs to (they declared it, or it is their first-hop fallback), in registry order, each at most once. `[]` when only parsers contributed. |
 
 ### 6.2 Sources and merge (normative)
 
@@ -448,19 +452,55 @@ Three optional sources, merged **in this order**:
    producing entries in file order (section 6.3).
 2. **Declared entry points** of every use-case (`entry_points[]`, section 5.2), use-cases
    in registry order, citations in declaration order. Unresolved citations are dropped
-   with a stderr report and never produce a node.
+   with a stderr report and never produce a node. Each declared entry carries the name
+   of the use-case that declared it.
 3. **Fallback**: for every use-case with **zero resolvable declared entry points**
    (including use-cases with an empty `entry_points`), its **first resolved hop** becomes
    an entry point with `kind: "other"`, `label` = use-case `name`, `symbol` = the hop's
    symbol or `null` when empty. A use-case with no resolved hop contributes nothing.
+   The fallback entry carries the use-case name too.
 
-Merge rule: deduplicate by the key `(i, symbol or "")` — the first occurrence (earliest
-source, then earliest position) wins and later duplicates are discarded. Two entries
-with the same label but different keys both survive. Finally sort by
-`(KINDS.index(kind), label, symbol or "", i)`; the sort is stable.
+Merge rule: entries are grouped by the key `(i, symbol or "")`; every group becomes
+**one** entry point that keeps what each source knows, instead of discarding all but the
+first. With the source precedence **declared > parsers > fallback**:
 
-Consequence to document for users: two use-cases whose first hop is the same file and
-symbol share one fallback entry point, labelled with the first use-case's name.
+| Field | Rule |
+|---|---|
+| `i`, `symbol` | the group key; identical in every member by construction |
+| `label` | the label of the first member of the most precedent source present. A hand-written declaration wins over a generated route; a fallback label (the use-case name) never overrides either. |
+| `kind` | the kind of the first member, in source precedence order, whose kind is not `"other"`; `"other"` when every member is `"other"`. An unprefixed declaration therefore does not demote a parser's `http`, while an explicit `command:` on the same symbol does. |
+| `route` | the label a route parser produced for the key, or — when `symbol` is `Class.method` — the one it produced for `(i, "Class")`. `null` when no parser contributed. An entry that comes from a parser alone has `route == label`. |
+| `ucs` | the names of the use-cases that declared the entry point or contributed it as a fallback, in registry order, each name at most once. |
+
+The merged entry keeps the list position of its first member (parsers, then declared,
+then fallback); the position only decides ties the sort below cannot break.
+
+Finally sort by `(KINDS.index(kind), route or label, label, symbol or "", i)`; the sort
+is stable. Sorting on the route first keeps the entry points of one parsed route
+together — the viewset the router mounted and each of its methods a use-case declared —
+instead of scattering them by their labels.
+
+Between `collect_from_usecases` and the merge, a declared or fallback entry carries its
+use-case name in the internal key `uc` and the position of that use-case in the loaded
+registry in the internal key `ucpos`. `ucs` is ordered on `ucpos`, not on the order the
+merge meets the contributions: the merge walks the whole declared list before the whole
+fallback list, so a use-case that comes first in the registry but contributes through
+the fallback would otherwise be named after a later one that declared the entry point.
+Neither key is ever emitted.
+
+Consequences to document for users:
+
+- Turning a route parser on never replaces a label a use-case author wrote: the parser's
+  route is kept in `route` and the declared `label` stands. The same registry shows the
+  same labels with and without a parser.
+- Two use-cases whose first hop is the same file and symbol still share one fallback
+  entry point, labelled with the first use-case's name — but both names appear in `ucs`.
+- Two use-cases declaring the same `(i, symbol)` share one entry point labelled with the
+  first declaration's label; both names appear in `ucs`.
+- A class-level route from a parser and a method-level entry a use-case declared on the
+  same class are different keys and stay two entries — deliberately, since they are two
+  different places to enter. They share the same `route`, so the panel shows them
+  together and says which route each belongs to.
 
 The merge lives in `pipeline/entry_points/__init__.py: merge_entry_points(...)` and is
 invoked by **`prep_extra.py`**, which is the only script that emits `entry_points`
@@ -499,6 +539,10 @@ pipeline/entry_points/django_drf.py parse(files, class_file, options) -> list[di
     kind would silently drop the entry point from the panel.
   - a parser reports what it could not map as
     `parser <name> (<file>): dropped [<reason>]: <what>` on stderr and continues.
+
+The parser interface is unchanged by the label/route merge: a parser still returns only
+label/kind/path/symbol, and `prep_extra.py` derives an entry point's route from the
+parser's own label (section 6.2).
 
 Config entry for a parser (`config.entry_points.parsers[n]`):
 
@@ -615,7 +659,9 @@ construction) and the `ucCount` centrality.
 
 ```
 { "nfiles": 240,
-  "entry_points": [ { "label": "/v1/books", "kind": "http", "i": 12, "symbol": "BookViewSet" } ],
+  "entry_points": [ { "label": "POST /v1/books/{id}/borrow", "kind": "http", "i": 12,
+                      "symbol": "BookViewSet", "route": "/v1/books",
+                      "ucs": ["Member borrows a copy of a title"] } ],
   "calls": { "12": { "n": [ ["BookViewSet.create", "validate", 31] ],
                      "x": [ ["BookViewSet.create", 40, "RegisterBookHandler", 33] ] } } }
 ```
@@ -913,6 +959,8 @@ substituted by the viewer. Keys and texts:
 | `kind.cli` | `CLI` | `CLI` |
 | `kind.cron` | `Scheduled` | `Agendados` |
 | `kind.other` | `Other` | `Outros` |
+| `ep.route` | `route {route}` | `rota {route}` |
+| `ep.ucs` | `use-cases: {names}` | `use-cases: {names}` |
 | `panel.stars` | `Stars` | `Estrelas` |
 | `star.stats` | `UC {uc}/{total} · imp {imp} · calls {calls}` | `UC {uc}/{total} · imp {imp} · cham {calls}` |
 | `panel.usecases` | `Use-cases` | `Use-cases` |
@@ -987,7 +1035,10 @@ a `localStorage` key, so it MUST be the same string in every language.
   `other`), each group with a small heading `UI_STRINGS['kind.<kind>']` and its count;
   groups with no entries are not rendered. Entries keep the order of the array.
 - Each entry shows `label` and, below it, `symbol` (when not null) and the base name of
-  `files[i].p`.
+  `files[i].p`. When `route` is set and differs from `label`, a third line shows
+  `ep.route`. When `ucs` holds names other than `label` itself, a fourth line shows
+  `ep.ucs` with at most three of them joined by ` · `, followed by `+N` for the rest
+  (`+N` is a marker, not prose: it is not localized).
 - Clicking an entry sets it active (`activeEp`): in the Context scene the lens dims
   every cluster outside the BFS-depth-2 reach of `entry_points[activeEp].i` and labels
   the entry cluster with the entry's `label`; in the other scenes the viewer goes to
@@ -995,8 +1046,14 @@ a `localStorage` key, so it MUST be the same string in every language.
   label) clears it. The Flow scene shows the call tree rooted at `i` titled
   `flow.call_tree_title` with `label = "<label> · <symbol>"` (or just `<label>` when
   `symbol` is null).
-- The detail panel for an active entry point (title `detail.entry_point`) shows
-  label, kind, symbol and the file link.
+- The detail panel for an active entry point (title `detail.entry_point`) shows label,
+  kind, the `ep.route` line when `route` differs from the label, symbol, the file link
+  and — when `ucs` is non-empty — every name in `ucs` under a heading reusing
+  `panel.usecases`, each name a link that selects that use-case. A name is looked up in
+  `ucs[]` by exact match; a name with no match is rendered as plain text. This list is
+  the exact "enters here" link, unlike `detail.ucs_here`, which is the file-level join.
+- The viewer MUST tolerate `route` and `ucs` being absent (an `extra.json` written before
+  this revision): a missing `route` reads as `null`, a missing `ucs` as `[]`.
 
 ### 13.4 Call tree launcher
 
@@ -1062,3 +1119,14 @@ editors, CI jobs that choose to install one, and as the reference for fixtures.
 | `build.py` | — | new single-command pipeline |
 | Citation parsing | first separator splits, `.search` | citation anywhere, first resolving candidate, role kept without separator |
 | stderr language | Portuguese | English, formats of section 11 |
+
+### 15.1 Revisions within contract 2
+
+`meta.contract` stays `2`: the embedded object only gains keys — none is removed or
+retyped — and nothing branches on the number. A consumer written against the first v2
+release keeps working, and a viewer of this revision reads an older `extra.json` by
+defaulting `route` to `null` and `ucs` to `[]`.
+
+| Date | Change |
+|---|---|
+| 2026-09 | Entry points: `route` and `ucs` added (6.1); the merge keeps every source's contribution instead of discarding all but the first, so a declared label survives a route parser (6.2); the sort gained `route` as its first text key; the panel shows the route and the declaring use-cases (13.3) with the new UI strings `ep.route` and `ep.ucs` (13.2). |
