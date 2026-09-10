@@ -181,6 +181,12 @@ overlap another, entry points by kind, stars rows and how many read all zeros, p
 errors, external requests, and which sidebar panels are present, open and how many rows
 they hold). Run `python tools/visual_review.py list` for the run and state names.
 
+**Where the pieces live.** `tools/visual_review.py` is the harness itself; beside it,
+`tools/config.py` holds the run matrix and the canonical state list, and
+`tools/probes.py` holds the two blobs of JavaScript that are evaluated inside the page
+(they are strings, executed in Chromium, never imported by Python). Adding a state means
+editing `config.py` and then `drive()`/`check_state()` in the harness.
+
 Each state drives the UI and then asserts the condition its own name claims, so a change
 to which panels start open moves a number in the table instead of breaking the run:
 panels are opened by reading their state and clicking only if needed, never by a blind
