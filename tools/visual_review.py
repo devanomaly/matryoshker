@@ -104,7 +104,6 @@ def run_step(argv, cwd):
     if proc.returncode != 0:
         sys.stderr.write(proc.stderr)
         fail('build step failed: ' + ' '.join(str(a) for a in argv))
-    return proc
 
 
 def build_html(repo_root, golden, template, out, config, lang):
@@ -326,14 +325,15 @@ def cmd_run(args):
 
     started = time.time()
     repo_root = Path(args.repo_root).resolve()
-    golden = Path(args.golden).resolve() if args.golden else repo_root / 'tests' / 'golden'
-    template = Path(args.template).resolve() if args.template \
-        else repo_root / 'viewer' / 'template.html'
-    for p, what in ((repo_root, '--repo-root'), (golden, '--golden')):
+    # Both are fixed positions inside the checkout --repo-root names, which is what
+    # makes the merge-base recipe (one harness, two worktrees) work.
+    golden = repo_root / 'tests' / 'golden'
+    template = repo_root / 'viewer' / 'template.html'
+    for p, what in ((repo_root, '--repo-root'), (golden, '<repo-root>/tests/golden')):
         if not p.is_dir():
             fail(f'{what}: not a directory: {p}')
     if not template.is_file():
-        fail(f'--template: not a file: {template}')
+        fail(f'<repo-root>/viewer/template.html: not a file: {template}')
 
     out = Path(args.out).resolve()
     # Principle 5: scripts never write into the repository being MAPPED. That repository
@@ -394,7 +394,7 @@ def cmd_run(args):
         'runs': {},
     }
     shots = 0
-    exe = args.browser or os.environ.get('MATRYOSHKER_CHROMIUM') or None
+    exe = os.environ.get('MATRYOSHKER_CHROMIUM') or None
 
     with sync_playwright() as pw:
         try:
@@ -419,7 +419,7 @@ def cmd_run(args):
             url = html.as_uri()
             run_out = {
                 'config': r['config'], 'theme': r['theme'], 'lang': r['lang'],
-                'html': str(html.relative_to(out)).replace(os.sep, '/'),
+                'html': html.relative_to(out).as_posix(),
                 'data_digest': data_digest,
             }
 
@@ -484,7 +484,7 @@ def cmd_run(args):
                     shot_path = out / 'shots' / r['id'] / f'{name}.png'
                     shot_path.parent.mkdir(parents=True, exist_ok=True)
                     page.screenshot(path=str(shot_path))
-                    shot = str(shot_path.relative_to(out)).replace(os.sep, '/')
+                    shot = shot_path.relative_to(out).as_posix()
                     shots += 1
                 # Screenshot first, then assert: the PNG of the wrong state is the most
                 # useful thing to look at when a post-condition fails.
@@ -845,10 +845,6 @@ def parse_args(argv=None):
                    help='checkout to drive: viewer/, pipeline/, config/, tests/golden/ and '
                         'examples/ are read from here, so one harness can run against a '
                         'git worktree of the merge base (default: this checkout)')
-    r.add_argument('--golden', default=None, metavar='DIR',
-                   help='committed extraction (default: <repo-root>/tests/golden)')
-    r.add_argument('--template', default=None, metavar='FILE',
-                   help='viewer template (default: <repo-root>/viewer/template.html)')
     r.add_argument('--only', default=None, metavar='RUN[,RUN...]',
                    help='subset of run ids (see "list")')
     r.add_argument('--states', default=None, metavar='STATE[,STATE...]',
@@ -862,8 +858,6 @@ def parse_args(argv=None):
     r.add_argument('--allow-webfonts', action='store_true',
                    help='do not block fonts.googleapis.com; slow and environment-'
                         'dependent, never for CI')
-    r.add_argument('--browser', default=None, metavar='PATH',
-                   help='Chromium/Chrome executable; overrides MATRYOSHKER_CHROMIUM')
     r.add_argument('--no-screenshots', action='store_true', help='metrics only')
     r.add_argument('--keep-build', action='store_true',
                    help='keep <out>/build/ (data.json, extra.json, derived config)')

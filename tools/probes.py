@@ -37,7 +37,9 @@ RUN_PROBE_JS = r"""
   const KINDS = ['http', 'command', 'event', 'cli', 'cron', 'other'];
   const by_kind = {};
   KINDS.forEach(k => by_kind[k] = 0);
-  for (const ep of EPS) by_kind[by_kind[ep.kind] === undefined ? 'other' : ep.kind]++;
+  // Every path into data.json (parser, declared entry point, merge) already
+  // coerces an unknown kind to 'other', so no fallback is needed here.
+  for (const ep of EPS) by_kind[ep.kind]++;
 
   const STATUSES = ['human-verified', 'agent-verified', 'inferred', 'hypothesis', 'outdated'];
   const by_status = {};
