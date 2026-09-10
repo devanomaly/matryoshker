@@ -42,12 +42,17 @@ RUN_PROBE_JS = r"""
   for (const ep of EPS) by_kind[ep.kind]++;
 
   const STATUSES = ['human-verified', 'agent-verified', 'inferred', 'hypothesis', 'outdated'];
-  const by_status = {};
+  const by_status = {unknown: 0};
   STATUSES.forEach(s => by_status[s] = 0);
   let hops_total = 0;
   for (const u of UCS) {
     hops_total += (u.hops || []).length;
-    if (by_status[u.status] !== undefined) by_status[u.status]++;
+    // An unrecognized status is COUNTED, never dropped: the pipeline maps the
+    // v1 pt-BR aliases onto the canonical values, and a regression in that
+    // mapping is exactly what this harness should surface. Discarding it here
+    // would leave sum(by_status) < ucs with nothing to show for it.
+    if (by_status[u.status] === undefined) by_status.unknown++;
+    else by_status[u.status]++;
   }
 
   // Star rows are read as numbers, never as words: "calls" is "cham" in pt-BR.
