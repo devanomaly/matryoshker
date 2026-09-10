@@ -7,6 +7,7 @@ CLIs against the golden extraction) lives in test_e2e.py.
 Reference: docs/data-contract.md, sections 3, 4, 5, 6, 8 and 9.
 """
 import json
+import os
 import sys
 
 import pytest
@@ -396,12 +397,14 @@ def test_run_parsers_known_kind_passes_through(monkeypatch, capsys):
 # Entry-point merge — data-contract section 6.2
 # ---------------------------------------------------------------------------
 
-def test_merge_entry_points_dedup_by_index_and_symbol():
-    parsed = [{'label': 'from parser', 'kind': 'http', 'i': 5, 'symbol': 'X'}]
-    declared = [{'label': 'from use-case', 'kind': 'http', 'i': 5, 'symbol': 'X'}]
+def test_merge_entry_points_declaration_wins_the_label_over_a_parser():
+    parsed = [{'label': '/api/books', 'kind': 'http', 'i': 5, 'symbol': 'X'}]
+    declared = [{'label': 'POST /api/books/{id}/borrow', 'kind': 'http', 'i': 5,
+                 'symbol': 'X', 'uc': 'UC'}]
     merged = merge_entry_points(parsed, declared, [])
     assert len(merged) == 1
-    assert merged[0]['label'] == 'from parser'   # first occurrence (earliest source) wins
+    assert merged[0] == {'label': 'POST /api/books/{id}/borrow', 'kind': 'http', 'i': 5,
+                         'symbol': 'X', 'route': '/api/books', 'ucs': ['UC']}
 
 
 def test_merge_entry_points_same_label_different_key_both_survive():
@@ -411,13 +414,94 @@ def test_merge_entry_points_same_label_different_key_both_survive():
     assert len(merged) == 2
 
 
-def test_merge_entry_points_source_order_parsers_then_declared_then_fallback():
+def test_merge_entry_points_source_precedence_declared_then_parsers_then_fallback():
     parsed = [{'label': 'p', 'kind': 'http', 'i': 1, 'symbol': None}]
-    declared = [{'label': 'd', 'kind': 'http', 'i': 1, 'symbol': None}]
-    fallback = [{'label': 'f', 'kind': 'http', 'i': 1, 'symbol': None}]
+    declared = [{'label': 'd', 'kind': 'http', 'i': 1, 'symbol': None, 'uc': 'UC d'}]
+    fallback = [{'label': 'f', 'kind': 'other', 'i': 1, 'symbol': None, 'uc': 'UC f'}]
     merged = merge_entry_points(parsed, declared, fallback)
     assert len(merged) == 1
-    assert merged[0]['label'] == 'p'
+    assert merged[0]['label'] == 'd'
+    assert merged[0]['route'] == 'p'
+    assert merged[0]['ucs'] == ['UC d', 'UC f']
+
+
+def test_merge_entry_points_parser_kind_survives_an_unprefixed_declaration():
+    parsed = [{'label': '/api/books', 'kind': 'http', 'i': 1, 'symbol': 'X'}]
+    declared = [{'label': 'the borrow route', 'kind': 'other', 'i': 1, 'symbol': 'X',
+                 'uc': 'UC'}]
+    merged = merge_entry_points(parsed, declared, [])
+    assert merged[0]['kind'] == 'http'          # 'other' never demotes a known kind
+    assert merged[0]['label'] == 'the borrow route'
+
+
+def test_merge_entry_points_an_explicit_declared_kind_wins():
+    parsed = [{'label': '/api/books', 'kind': 'http', 'i': 1, 'symbol': 'X'}]
+    declared = [{'label': 'borrow', 'kind': 'command', 'i': 1, 'symbol': 'X', 'uc': 'UC'}]
+    assert merge_entry_points(parsed, declared, [])[0]['kind'] == 'command'
+
+
+def test_merge_entry_points_method_inherits_the_route_of_its_class():
+    parsed = [{'label': '/api/books', 'kind': 'http', 'i': 1, 'symbol': 'BookViewSet'}]
+    declared = [{'label': 'GET /api/books', 'kind': 'http', 'i': 1,
+                 'symbol': 'BookViewSet.list', 'uc': 'UC'}]
+    merged = merge_entry_points(parsed, declared, [])
+    assert len(merged) == 2                      # different symbols: two entry points
+    assert {e['route'] for e in merged} == {'/api/books'}
+
+
+def test_merge_entry_points_route_is_none_without_a_parser():
+    merged = merge_entry_points([], [{'label': 'd', 'kind': 'http', 'i': 0,
+                                      'symbol': 'X'}], [])
+    assert merged[0]['route'] is None and merged[0]['ucs'] == []
+
+
+def test_merge_entry_points_lists_every_use_case_of_one_entry_point():
+    declared = [{'label': 'first', 'kind': 'http', 'i': 2, 'symbol': 'X', 'uc': 'UC one'},
+                {'label': 'second', 'kind': 'http', 'i': 2, 'symbol': 'X', 'uc': 'UC two'}]
+    merged = merge_entry_points([], declared, [])
+    assert len(merged) == 1
+    assert merged[0]['label'] == 'first'         # first declaration wins the label
+    assert merged[0]['ucs'] == ['UC one', 'UC two']
+
+
+def test_merge_entry_points_does_not_repeat_a_use_case_name():
+    declared = [{'label': 'a', 'kind': 'http', 'i': 2, 'symbol': 'X', 'uc': 'UC'},
+                {'label': 'b', 'kind': 'http', 'i': 2, 'symbol': 'X', 'uc': 'UC'}]
+    assert merge_entry_points([], declared, [])[0]['ucs'] == ['UC']
+
+
+def test_merge_entry_points_lists_the_use_cases_in_registry_order_not_source_order():
+    # The merge walks the whole declared list before the whole fallback list, so a
+    # use-case that comes first in the registry but arrives through the fallback must
+    # still be named first: the panel truncates ucs to the first three names.
+    declared = [{'label': 'declared by B', 'kind': 'http', 'i': 1, 'symbol': 'X',
+                 'uc': 'B', 'ucpos': 1}]
+    fallback = [{'label': 'A', 'kind': 'other', 'i': 1, 'symbol': 'X',
+                 'uc': 'A', 'ucpos': 0}]
+    merged = merge_entry_points([], declared, fallback)
+    assert len(merged) == 1
+    assert merged[0]['ucs'] == ['A', 'B']
+    assert merged[0]['label'] == 'declared by B'   # the merge order itself is unchanged
+
+
+def test_merge_entry_points_sorts_the_entries_of_one_route_together():
+    # 'GET /api/books' sorts before '/api/health' by label, so a label-first sort would
+    # put HealthView between the two entries of /api/books. Sorting on the route keeps
+    # the viewset and the method a use-case declared under it adjacent.
+    parsed = [{'label': '/api/books', 'kind': 'http', 'i': 1, 'symbol': 'BookViewSet'},
+              {'label': '/api/health', 'kind': 'http', 'i': 2, 'symbol': 'HealthView'}]
+    declared = [{'label': 'GET /api/books', 'kind': 'http', 'i': 1,
+                 'symbol': 'BookViewSet.list', 'uc': 'UC'}]
+    merged = merge_entry_points(parsed, declared, [])
+    assert [e['symbol'] for e in merged] == ['BookViewSet', 'BookViewSet.list',
+                                             'HealthView']
+    assert [e['route'] for e in merged] == ['/api/books', '/api/books', '/api/health']
+
+
+def test_merge_entry_points_emits_only_the_contract_keys():
+    declared = [{'label': 'd', 'kind': 'http', 'i': 1, 'symbol': None, 'uc': 'UC'}]
+    merged = merge_entry_points([], declared, [])
+    assert set(merged[0]) == {'label', 'kind', 'i', 'symbol', 'route', 'ucs'}
 
 
 def test_merge_entry_points_sort_order_kind_then_label_then_symbol_then_index():
@@ -446,7 +530,8 @@ def test_collect_from_usecases_falls_back_to_first_hop_when_no_entry_point_decla
     declared, fallback = prep_extra.collect_from_usecases(raw_ucs, find_file, totals)
     assert declared == []
     assert fallback == [{'label': 'UC without a declared entry point', 'kind': 'other',
-                         'i': 0, 'symbol': 'Handler.run'}]
+                         'i': 0, 'symbol': 'Handler.run',
+                         'uc': 'UC without a declared entry point', 'ucpos': 0}]
 
 
 def test_collect_from_usecases_prefers_declared_over_fallback():
@@ -460,6 +545,8 @@ def test_collect_from_usecases_prefers_declared_over_fallback():
     declared, fallback = prep_extra.collect_from_usecases(raw_ucs, find_file, totals)
     assert len(declared) == 1
     assert declared[0]['kind'] == 'command'
+    assert declared[0]['uc'] == 'UC with a declared entry point'
+    assert declared[0]['ucpos'] == 0             # registry position, for the ucs order
     assert fallback == []
 
 
@@ -618,3 +705,86 @@ def test_inject_aborts_on_nfiles_mismatch(tmp_path, monkeypatch):
     with pytest.raises(SystemExit, match='does not match'):
         inject.main()
     assert not out_path.exists()
+
+
+# ---------------------------------------------------------------------------
+# Hop role prefixes -> derived hops[].k — data-contract sections 5.1 and 7.4
+# ---------------------------------------------------------------------------
+
+FIXTURE_UCS = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           'fixtures', 'branching-usecases.json')
+
+
+def _branching_finder():
+    """A file finder over the seven paths cited by the branching fixture.
+
+    Built from the fixture itself rather than from the golden extraction, which
+    contains no `ingest/` files at all.
+    """
+    raw = json.load(open(FIXTURE_UCS, encoding='utf-8'))
+    paths, seen = [], set()
+    for hop in raw[0]['hops']:
+        path = hop.split(':', 1)[0].strip()
+        if path not in seen:
+            seen.add(path)
+            paths.append(path)
+    path_index = {p: n for n, p in enumerate(paths)}
+    return raw, usecases.make_file_finder(path_index)
+
+
+def test_branching_fixture_cites_seven_distinct_files():
+    raw, _ = _branching_finder()
+    assert len(raw[0]['hops']) == 10
+    assert len({h.split(':', 1)[0] for h in raw[0]['hops']}) == 7
+
+
+def test_parse_hop_derives_k_for_every_fixture_hop():
+    raw, find_file = _branching_finder()
+    kinds = []
+    for line in raw[0]['hops']:
+        hop, reason = usecases.parse_hop(line, find_file)
+        assert hop is not None, reason
+        kinds.append(hop.get('k'))
+    assert kinds == [None, 'branch', 'branch', 'branch', None,
+                     'branch', 'branch', None, 'branch', 'branch']
+
+
+def test_parse_hop_omits_k_when_the_role_has_no_prefix():
+    find_file = usecases.make_file_finder({'a/b.py': 0})
+    hop, _ = usecases.parse_hop('a/b.py:f — plain role, no prefix', find_file)
+    assert 'k' not in hop
+
+
+@pytest.mark.parametrize('prefix,expected', [
+    ('branch:', 'branch'), ('Branch:', 'branch'), ('BRANCH:', 'branch'),
+    ('ramo:', 'branch'), ('Ramo:', 'branch'), ('RAMO:', 'branch'),
+    ('seam:', 'seam'), ('Seam:', 'seam'), ('SEAM:', 'seam'),
+    ('costura:', 'seam'), ('Costura:', 'seam'), ('COSTURA:', 'seam'),
+])
+def test_parse_hop_recognizes_both_languages_case_insensitively(prefix, expected):
+    find_file = usecases.make_file_finder({'a/b.py': 0})
+    hop, _ = usecases.parse_hop(f'a/b.py:f — {prefix} does something', find_file)
+    assert hop['k'] == expected
+
+
+def test_parse_hop_keeps_the_prefix_inside_r():
+    find_file = usecases.make_file_finder({'a/b.py': 0})
+    hop, _ = usecases.parse_hop('a/b.py:f — branch: layout A, best-effort', find_file)
+    assert hop['r'] == 'branch: layout A, best-effort'
+    assert hop['k'] == 'branch'
+
+
+def test_parse_hop_ignores_a_prefix_word_that_is_not_at_the_start():
+    find_file = usecases.make_file_finder({'a/b.py': 0})
+    hop, _ = usecases.parse_hop('a/b.py:f — picks the branch: left or right', find_file)
+    assert 'k' not in hop
+
+
+def test_build_ucs_carries_k_through_to_the_viewer_shape():
+    raw, find_file = _branching_finder()
+    files = [{'p': 'ingest/x.py', 'c': [], 'f': []}] * 7
+    ucs = prep_data.build_ucs(usecases.load_usecases(FIXTURE_UCS), files, find_file,
+                              {'hops': 0, 'dropped': 0, 'use_cases': 0})
+    assert [h.get('k') for h in ucs[0]['hops']] == [
+        None, 'branch', 'branch', 'branch', None, 'branch', 'branch', None,
+        'branch', 'branch']

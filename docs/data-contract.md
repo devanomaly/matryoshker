@@ -281,6 +281,8 @@ viewer only ever contain canonical values.
     "hops": [
       "src/api/views.py:BookViewSet.create — validates the payload and dispatches",
       "src/domain/commands.py:RegisterBookHandler.handle — central rule",
+      "src/domain/isbn.py:validate_isbn13 — branch: ISBN-13, checksum over 12 digits",
+      "src/domain/isbn.py:validate_isbn10 — branch: legacy ISBN-10, X allowed as check digit",
       "src/infra/repositories.py:BookRepository.add — persists the aggregate"
     ],
     "async_legs": [],
@@ -293,6 +295,10 @@ viewer only ever contain canonical values.
   }
 ]
 ```
+
+The two `branch:` hops are siblings, not a sequence: the handler picks one validator by
+ISBN length and both reconverge on `BookRepository.add`. The viewer draws them as level
+`3a` / `3b` side by side, with `add` at level 4 (§5.1).
 
 ---
 
@@ -315,6 +321,49 @@ and the reporting format; they differ only in what surrounds the citation.
   symbol is stripped.
 - `<role>` is free text describing what the hop does (14 words or fewer recommended);
   it is truncated at **140 characters** (`ROLE_MAX_LEN`).
+
+**Role prefixes.** A role MAY open with one of four words followed by a colon. The word
+is matched case-insensitively and only at the very start of the role, so `picks the
+branch: left or right` is ordinary prose, not a prefix.
+
+| Prefix (en) | Prefix (pt) | Derived `hops[].k` | Meaning |
+|---|---|---|---|
+| `branch:` | `ramo:` | `"branch"` | a sibling: one of N alternatives chosen at the preceding hop |
+| `seam:` | `costura:` | `"seam"` | the hop crosses a seam — disk, HTTP, subprocess, a human step |
+
+The prefix stays inside `r` verbatim (§7.4); the derived kind is emitted separately so
+the viewer never re-parses role text and the vocabulary lives in `pipeline/usecases.py`
+alone. A registry with no prefixes emits no `k` at all and its `data.json` is byte for
+byte what it was before fan-out existed.
+
+**Fan semantics.** `hops` stays a flat array in execution order; the fan is derived from
+adjacency:
+
+- **selector** — the last non-`branch` hop before a run of `branch` hops;
+- **siblings** — the *consecutive* run of `branch` hops. The whole run occupies **one
+  level**, drawn side by side;
+- **reconvergence** — the next non-`branch` hop, which receives one edge from each
+  sibling.
+
+**Numbering is by level, not by hop.** The selector is level N-1, every sibling is level
+N and is labeled `Na`, `Nb`, `Nc`, the reconvergence is level N+1. A registry with one
+hop per level — which is any registry without role prefixes — therefore numbers `1..N`,
+exactly as before. Edges are the cartesian product between consecutive levels, which
+covers selector→fan (1×N), fan→reconvergence (N×1) and step→step (1×1) with one rule;
+two fans are never adjacent by construction, so N×M cannot arise. A run of length 1 is
+still a fan: it is drawn off the main line, so a lone `branch:` between two ordinary hops
+does not read as a step.
+
+**Limitations, deliberate in this version.**
+
+- **No nesting.** A `branch:` hop cannot itself open a sub-fan.
+- **Two independent adjacent lateral alternatives merge into one fan of two.** Adjacency
+  is all the grammar has. To express them separately, put a non-branch hop between them.
+- **A sibling that actually terminates mid-chain is still drawn reconverging.** An error
+  path is not a step toward the next hop, and the registry has no way to say so.
+- **The map overlay is file-level** and dedups consecutive hops of the same file, so a
+  fan whose siblings live in the selector's own file cannot appear there. The Flow panel
+  is hop-level and does show it.
 
 ### 5.2 Entry-point citation
 
@@ -430,15 +479,19 @@ points and no `urls.py`. The v1 `endpoints` key no longer exists.
 ### 6.1 Shape in the embedded object
 
 ```
-"entry_points": [ { "label": "/v1/books", "kind": "http", "i": 12, "symbol": "BookViewSet" } ]
+"entry_points": [ { "label": "POST /v1/books/{id}/borrow", "kind": "http", "i": 12,
+                    "symbol": "BookViewSet", "route": "/v1/books",
+                    "ucs": ["Member borrows a copy of a title"] } ]
 ```
 
 | Key | Type | Meaning |
 |---|---|---|
-| `label` | string, non-empty | What the panel shows. Route string for parsers (method-less, e.g. `/v1/books`), declared label or use-case name otherwise. |
+| `label` | string, non-empty | What the panel shows. A label a use-case author declared, when there is one; else the route a parser produced; else the use-case name. |
 | `kind` | `"http"` \| `"command"` \| `"event"` \| `"cli"` \| `"cron"` \| `"other"` | Group in the panel. |
 | `i` | integer, `0 <= i < nfiles` | File where execution enters. Everything the viewer does with an entry point starts from this index. |
 | `symbol` | string \| null | Declaring symbol (view class, handler, function) when known. |
+| `route` | string \| null | The route a parser produced for this entry point — its own, or the one of the class it is a method of. `null` when no parser contributed. Kept next to `label` so turning a parser on never destroys a written label. |
+| `ucs` | array of strings | Names of the use-cases this entry point belongs to (they declared it, or it is their first-hop fallback), in registry order, each at most once. `[]` when only parsers contributed. |
 
 ### 6.2 Sources and merge (normative)
 
@@ -448,19 +501,55 @@ Three optional sources, merged **in this order**:
    producing entries in file order (section 6.3).
 2. **Declared entry points** of every use-case (`entry_points[]`, section 5.2), use-cases
    in registry order, citations in declaration order. Unresolved citations are dropped
-   with a stderr report and never produce a node.
+   with a stderr report and never produce a node. Each declared entry carries the name
+   of the use-case that declared it.
 3. **Fallback**: for every use-case with **zero resolvable declared entry points**
    (including use-cases with an empty `entry_points`), its **first resolved hop** becomes
    an entry point with `kind: "other"`, `label` = use-case `name`, `symbol` = the hop's
    symbol or `null` when empty. A use-case with no resolved hop contributes nothing.
+   The fallback entry carries the use-case name too.
 
-Merge rule: deduplicate by the key `(i, symbol or "")` — the first occurrence (earliest
-source, then earliest position) wins and later duplicates are discarded. Two entries
-with the same label but different keys both survive. Finally sort by
-`(KINDS.index(kind), label, symbol or "", i)`; the sort is stable.
+Merge rule: entries are grouped by the key `(i, symbol or "")`; every group becomes
+**one** entry point that keeps what each source knows, instead of discarding all but the
+first. With the source precedence **declared > parsers > fallback**:
 
-Consequence to document for users: two use-cases whose first hop is the same file and
-symbol share one fallback entry point, labelled with the first use-case's name.
+| Field | Rule |
+|---|---|
+| `i`, `symbol` | the group key; identical in every member by construction |
+| `label` | the label of the first member of the most precedent source present. A hand-written declaration wins over a generated route; a fallback label (the use-case name) never overrides either. |
+| `kind` | the kind of the first member, in source precedence order, whose kind is not `"other"`; `"other"` when every member is `"other"`. An unprefixed declaration therefore does not demote a parser's `http`, while an explicit `command:` on the same symbol does. |
+| `route` | the label a route parser produced for the key, or — when `symbol` is `Class.method` — the one it produced for `(i, "Class")`. `null` when no parser contributed. An entry that comes from a parser alone has `route == label`. |
+| `ucs` | the names of the use-cases that declared the entry point or contributed it as a fallback, in registry order, each name at most once. |
+
+The merged entry keeps the list position of its first member (parsers, then declared,
+then fallback); the position only decides ties the sort below cannot break.
+
+Finally sort by `(KINDS.index(kind), route or label, label, symbol or "", i)`; the sort
+is stable. Sorting on the route first keeps the entry points of one parsed route
+together — the viewset the router mounted and each of its methods a use-case declared —
+instead of scattering them by their labels.
+
+Between `collect_from_usecases` and the merge, a declared or fallback entry carries its
+use-case name in the internal key `uc` and the position of that use-case in the loaded
+registry in the internal key `ucpos`. `ucs` is ordered on `ucpos`, not on the order the
+merge meets the contributions: the merge walks the whole declared list before the whole
+fallback list, so a use-case that comes first in the registry but contributes through
+the fallback would otherwise be named after a later one that declared the entry point.
+Neither key is ever emitted.
+
+Consequences to document for users:
+
+- Turning a route parser on never replaces a label a use-case author wrote: the parser's
+  route is kept in `route` and the declared `label` stands. The same registry shows the
+  same labels with and without a parser.
+- Two use-cases whose first hop is the same file and symbol still share one fallback
+  entry point, labelled with the first use-case's name — but both names appear in `ucs`.
+- Two use-cases declaring the same `(i, symbol)` share one entry point labelled with the
+  first declaration's label; both names appear in `ucs`.
+- A class-level route from a parser and a method-level entry a use-case declared on the
+  same class are different keys and stay two entries — deliberately, since they are two
+  different places to enter. They share the same `route`, so the panel shows them
+  together and says which route each belongs to.
 
 The merge lives in `pipeline/entry_points/__init__.py: merge_entry_points(...)` and is
 invoked by **`prep_extra.py`**, which is the only script that emits `entry_points`
@@ -499,6 +588,10 @@ pipeline/entry_points/django_drf.py parse(files, class_file, options) -> list[di
     kind would silently drop the entry point from the panel.
   - a parser reports what it could not map as
     `parser <name> (<file>): dropped [<reason>]: <what>` on stderr and continues.
+
+The parser interface is unchanged by the label/route merge: a parser still returns only
+label/kind/path/symbol, and `prep_extra.py` derives an entry point's route from the
+parser's own label (section 6.2).
 
 Config entry for a parser (`config.entry_points.parsers[n]`):
 
@@ -591,7 +684,8 @@ imports, the entry-point lens = BFS of depth 2 over out-edges, the `impIn` centr
 ```
 { "name": "Librarian registers a new book", "actor": "Librarian", "goal": "…",
   "seam": false, "rules": ["ISBN must be unique"], "status": "inferred",
-  "hops": [ { "i": 12, "s": "BookViewSet.create", "r": "validates the payload and dispatches" } ] }
+  "hops": [ { "i": 12, "s": "BookViewSet.create", "r": "validates the payload and dispatches" },
+            { "i": 18, "s": "validate_isbn13", "r": "branch: ISBN-13, checksum over 12 digits", "k": "branch" } ] }
 ```
 
 | Key | Type | Source |
@@ -602,7 +696,13 @@ imports, the entry-point lens = BFS of depth 2 over out-edges, the `impIn` centr
 | `seam` | boolean | `bool(seam_crossing)` |
 | `rules` | array of strings | `rules` (`regras_envolvidas`) |
 | `status` | canonical status | `status` after alias mapping |
-| `hops` | array of `{i, s, r}` | resolved hops only, in registry order; `s` is `""` when the citation had no symbol |
+| `hops` | array of `{i, s, r}` plus optional `k` | resolved hops only, in registry order; `s` is `""` when the citation had no symbol |
+
+`hops[].k` is derived from the role prefix of §5.1 and is one of `"branch"` or `"seam"`.
+It is **omitted** when the role has no prefix, so a registry that uses none produces the
+same bytes it always did. `r` is unaffected: it keeps the prefix verbatim, which is what
+the detail panel shows an author fixing the registry file. Consumers that do not care
+about fan-out can ignore `k` entirely.
 
 Registry order is preserved. A use-case with zero resolved hops is still emitted (it
 shows in the panel with `Hops (0)`). The viewer derives `ucByFile` (reverse index
@@ -615,7 +715,9 @@ construction) and the `ucCount` centrality.
 
 ```
 { "nfiles": 240,
-  "entry_points": [ { "label": "/v1/books", "kind": "http", "i": 12, "symbol": "BookViewSet" } ],
+  "entry_points": [ { "label": "POST /v1/books/{id}/borrow", "kind": "http", "i": 12,
+                      "symbol": "BookViewSet", "route": "/v1/books",
+                      "ucs": ["Member borrows a copy of a title"] } ],
   "calls": { "12": { "n": [ ["BookViewSet.create", "validate", 31] ],
                      "x": [ ["BookViewSet.create", 40, "RegisterBookHandler", 33] ] } } }
 ```
@@ -884,6 +986,11 @@ python pipeline/inject.py --template viewer/template.html --data out/data.json \
 The viewer is repo-agnostic and reads only the embedded object of 8.1. This section is
 the contract the viewer implementation follows.
 
+The page issues exactly **one** external request: the Google Fonts `<link>` in its
+`<head>`. The viewer MUST stay fully functional when that request fails (offline, or a
+host CSP that blocks it) — every `font-family` declaration ends in a generic fallback and
+no script, style or data comes from the network.
+
 ### 13.1 `meta` keys the viewer needs
 
 `repo`, `commit`, `date` (header: `<repo> @ <commit> · <date>`), `lang` (13.2),
@@ -913,8 +1020,11 @@ substituted by the viewer. Keys and texts:
 | `kind.cli` | `CLI` | `CLI` |
 | `kind.cron` | `Scheduled` | `Agendados` |
 | `kind.other` | `Other` | `Outros` |
+| `ep.route` | `route {route}` | `rota {route}` |
+| `ep.ucs` | `use-cases: {names}` | `use-cases: {names}` |
 | `panel.stars` | `Stars` | `Estrelas` |
 | `star.stats` | `UC {uc}/{total} · imp {imp} · calls {calls}` | `UC {uc}/{total} · imp {imp} · cham {calls}` |
+| `stars.none` | `No file qualifies yet — a file appears here once a use-case, an import or a call points at it.` | `Nenhum arquivo se qualifica ainda — um arquivo aparece aqui quando um use-case, um import ou uma chamada aponta para ele.` |
 | `panel.usecases` | `Use-cases` | `Use-cases` |
 | `badge.seam` | `seam` | `seam` |
 | `uc.clear` | `clear selection (Esc)` | `limpar seleção (Esc)` |
@@ -982,12 +1092,17 @@ a `localStorage` key, so it MUST be the same string in every language.
 ### 13.3 Entry points panel
 
 - Reads `DATA.entry_points` (default `[]`). When the array is empty the whole section
-  (header and list) is hidden — not collapsed, absent from the layout.
+  (header and list) is hidden — not collapsed, absent from the layout. When it is
+  non-empty the section is rendered **open** (the header carries no `closed` class and
+  the list is visible); clicking the header collapses and re-expands it.
 - Grouped by `kind` in the order of `KINDS` (`http`, `command`, `event`, `cli`, `cron`,
   `other`), each group with a small heading `UI_STRINGS['kind.<kind>']` and its count;
   groups with no entries are not rendered. Entries keep the order of the array.
 - Each entry shows `label` and, below it, `symbol` (when not null) and the base name of
-  `files[i].p`.
+  `files[i].p`. When `route` is set and differs from `label`, a third line shows
+  `ep.route`. When `ucs` holds names other than `label` itself, a fourth line shows
+  `ep.ucs` with at most three of them joined by ` · `, followed by `+N` for the rest
+  (`+N` is a marker, not prose: it is not localized).
 - Clicking an entry sets it active (`activeEp`): in the Context scene the lens dims
   every cluster outside the BFS-depth-2 reach of `entry_points[activeEp].i` and labels
   the entry cluster with the entry's `label`; in the Flow scene it becomes the Flow
@@ -999,8 +1114,14 @@ a `localStorage` key, so it MUST be the same string in every language.
   While the entry point is the Flow source, the Flow scene shows the call tree rooted at
   `i` titled `flow.call_tree_title` with `label = "<label> · <symbol>"` (or just
   `<label>` when `symbol` is null).
-- The detail panel for an active entry point (title `detail.entry_point`) shows
-  label, kind, symbol and the file link.
+- The detail panel for an active entry point (title `detail.entry_point`) shows label,
+  kind, the `ep.route` line when `route` differs from the label, symbol, the file link
+  and — when `ucs` is non-empty — every name in `ucs` under a heading reusing
+  `panel.usecases`, each name a link that selects that use-case. A name is looked up in
+  `ucs[]` by exact match; a name with no match is rendered as plain text. This list is
+  the exact "enters here" link, unlike `detail.ucs_here`, which is the file-level join.
+- The viewer MUST tolerate `route` and `ucs` being absent (an `extra.json` written before
+  this revision): a missing `route` reads as `null`, a missing `ucs` as `[]`.
 
 ### 13.4 Flow source and the call tree launcher
 
@@ -1049,6 +1170,66 @@ source follows whatever is left.
   Portuguese values simply stop applying).
 - The export snippet is `{ "<name>": "<canonical status>" }`.
 - `localStorage` keys are unchanged: `mtk:<repo>@<commit>:pos`, `:st`, `:hidef`.
+- The Flow scene groups `hops` into levels with `groupHops()` per §5.1 and draws each
+  level as a row, the siblings of a fan side by side. Fan edges are **solid** — same
+  stroke as an ordinary step; a `"seam"` hop's *incoming* edges are **dashed**, and the
+  two compose (a sibling that is also a seam is entered dashed while its peers are not).
+  The role prefix is dropped from the drawn label — the token up to the first `:` — and
+  the pipeline's `k` decides whether there is one to drop, so the vocabulary is not
+  duplicated in the viewer.
+- The **detail panel** is unaffected: it lists the registry's own lines in JSON order,
+  prefix visible, because that is what an author needs when correcting the file.
+- The map overlay applies the same level grouping, but it is file-level and dedups
+  consecutive hops of the same file, so a fan whose siblings share the selector's file
+  does not appear there (§5.1).
+
+### 13.6 Scene layout (determinism)
+
+The layout of every scene is a pure function of the embedded object. It MUST NOT read the
+viewport (`clientWidth`/`clientHeight`, media queries), the wall clock or a random source,
+and MUST NOT measure rendered text (`getComputedTextLength`, canvas metrics): the same
+data must always produce the same map, because the drag offsets saved in
+`mtk:<repo>@<commit>:pos` are deltas over these base positions.
+
+- Packages and Context pack their boxes with a shelf-packing helper whose shelf width is
+  derived from the packed content: `max(widest box, sqrt(total area × 1.8))`, where the
+  total area sums `(w + column gap) × (h + row gap)` over the boxes. No constant caps the
+  width of the map.
+- A cluster box is as wide as the wider of its node grid and its label, the label
+  contribution being capped (210 units in Packages, 240 in Context). Text width is
+  estimated from the character count of the monospace label (East Asian wide code points
+  count as two cells), never measured.
+- A label that does not fit is clipped with `…` using the same estimate, so a label can
+  never leave its own box and two labels can never overlap. The untruncated text stays
+  available as an SVG `<title>`: on the label in Packages, and on the box group in
+  Context, where it is emitted only when the name was actually clipped, so an untruncated
+  box carries no native tooltip repeating the label it already shows.
+- `fit()` and `centerOn()` are view operations, not layout: they may read the viewport.
+
+### 13.6 Stars panel
+
+The panel ranks the files something else points at ("most central"). It is derived
+entirely from the embedded object; the pipeline computes nothing for it.
+
+- Candidates are all files whose category is not `muted` (3.2).
+- A candidate **qualifies** only when at least one of the three centralities is non-zero:
+  `ucCount` (use-cases whose hops touch the file, derived from `ucs`), `impIn` (inbound
+  edges in `imports`), `callIn` (inbound cross-file edges in `calls`). A file nothing
+  points at never appears, whatever the list length.
+- Qualifying files are sorted by `ucCount` desc, then `impIn` desc, then `callIn` desc;
+  the sort is stable, so files equal on all three keep file order. At most **20** rows
+  are rendered.
+- The badge shows the number of rows actually rendered (never a padded 20).
+- A row shows the file's base name; when a base name repeats inside the rendered list the
+  row shows `<parent folder>/<base name>` instead, and the full path when that still
+  repeats. The row's `title` is always the full path. A label too long for the panel wraps
+  inside its row instead of overflowing it.
+- When nothing qualifies — a legitimate state for a repository with no use-case registry
+  yet and no resolvable imports or calls — the section stays visible with badge `0` and
+  the list holds the single message `UI_STRINGS['stars.none']`.
+- Clicking a row goes to Packages, selects and centers that file. The `stars` header
+  toggle (halos in the Packages scene) is a separate feature driven by `ucCount` for
+  every file and is not affected by the panel's filter.
 
 ---
 
@@ -1088,3 +1269,14 @@ editors, CI jobs that choose to install one, and as the reference for fixtures.
 | `build.py` | — | new single-command pipeline |
 | Citation parsing | first separator splits, `.search` | citation anywhere, first resolving candidate, role kept without separator |
 | stderr language | Portuguese | English, formats of section 11 |
+
+### 15.1 Revisions within contract 2
+
+`meta.contract` stays `2`: the embedded object only gains keys — none is removed or
+retyped — and nothing branches on the number. A consumer written against the first v2
+release keeps working, and a viewer of this revision reads an older `extra.json` by
+defaulting `route` to `null` and `ucs` to `[]`.
+
+| Date | Change |
+|---|---|
+| 2026-09 | Entry points: `route` and `ucs` added (6.1); the merge keeps every source's contribution instead of discarding all but the first, so a declared label survives a route parser (6.2); the sort gained `route` as its first text key; the panel shows the route and the declaring use-cases (13.3) with the new UI strings `ep.route` and `ep.ucs` (13.2). |

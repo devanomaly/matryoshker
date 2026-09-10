@@ -26,7 +26,7 @@ sobre essas primitivas.
 | **Contexto** | C1 | pacotes como caixas + arestas agregadas de import (espessura = nº de imports); lente de endpoint esmaece o não-alcançado (BFS prof. 2) |
 | **Pacotes** | C2 | todos os arquivos em clusters por pacote, coloridos por categoria |
 | **Símbolos** | C3–C4 | duplo-clique num arquivo: classes/funções como pills + chamadas internas e cross-file como arestas |
-| **Fluxo** | — | só aparece com UC ou endpoint ativo: UC → cadeia vertical numerada dos hops; endpoint → árvore de chamadas top-down |
+| **Fluxo** | — | só aparece com UC ou endpoint ativo: UC → cadeia vertical numerada dos hops, com leque nos hops `ramo:`; endpoint → árvore de chamadas top-down |
 
 Mais:
 
@@ -45,7 +45,9 @@ Mais:
   não tem botão próprio de tema);
 
 tudo num único HTML autocontido (CSP-safe, sem dependências externas além do `<link>` do
-Google Fonts).
+Google Fonts). Esse `<link>` é a única requisição de rede da página: bloqueie-o, ou abra o
+arquivo offline, e o mapa continua funcionando por completo — só as fontes caem para as do
+sistema.
 
 ## Tags epistêmicas
 
@@ -107,7 +109,7 @@ chaves:
 | `meta` | `{repo, commit, data, categories[], nfiles…}` | header, legenda, cores por categoria |
 | `files` | `[{p: caminho, n: linhas, g: categoria, c: [[classe, ini, fim, [métodos]]…], f: [[função, ini, fim]…]}]` | todas as cenas; o **índice do arquivo neste array** é a identidade usada por todo o resto |
 | `imports` | `[[origem, destino]…]` (índices de `files`) | arestas do Contexto (agregadas por pacote), painel importa/importado-por, lente de endpoint (BFS), centralidade `imp` |
-| `ucs` | `[{nome, ator, obj, seam, status, regras, hops: [{i: arquivo, s: símbolo, r: papel}]}]` | painel de UCs, overlay com setas, cena Fluxo (cadeia), índice reverso arquivo→UCs, centralidade `UC` |
+| `ucs` | `[{nome, ator, obj, seam, status, regras, hops: [{i: arquivo, s: símbolo, r: papel, k?: "branch"\|"seam"}]}]` | painel de UCs, overlay com setas, cena Fluxo (cadeia com leques), índice reverso arquivo→UCs, centralidade `UC` |
 | `endpoints` | `[{route, view, i: arquivo}]` | painel de endpoints, lente no Contexto, árvore de chamadas no Fluxo |
 | `calls` | `{arquivo: {n: [[chamador, chamado, linha]…], x: [[chamador, arquivo-alvo, símbolo, linha]…]}}` | arestas da cena Símbolos (internas e cross-file), árvore de chamadas, centralidade `cham` |
 
@@ -141,10 +143,31 @@ repo+commit) — o botão de export é a ponte do rascunho de volta ao repo, via
   consome `nome`, `ator`, `objetivo`, `hops`, `regras_envolvidas`, `seam_crossing` e
   `status`; os demais campos (e extras como `notas`/`preconditions`) ficam no registro
   como documentação e são ignorados pelo `prep_data.py` sem erro.
+- **Prefixos de papel nos hops.** Um papel pode começar com `ramo:` / `branch:` (irmão:
+  uma de N alternativas escolhidas no hop anterior) ou `costura:` / `seam:` (o hop
+  atravessa uma costura — disco, HTTP, subprocesso, passo humano). O prefixo é
+  reconhecido sem distinção de maiúsculas e só no início do papel. O `prep_data.py`
+  deriva dele o campo opcional `ucs[].hops[].k` (`"branch"` | `"seam"`), **omitido**
+  quando não há prefixo — um registro sem prefixos gera o mesmo `data.json` de sempre.
+  O texto de `r` continua verbatim, com o prefixo dentro.
+- **Leque.** Uma corrida *consecutiva* de hops `ramo:` ocupa **um nível** e é desenhada
+  lado a lado: o hop não-ramo anterior é o seletor, o próximo é a reconvergência, que
+  recebe uma aresta de cada irmão. **A numeração é por nível**: seletor no nível N-1,
+  irmãos rotulados `Na`, `Nb`, `Nc` no nível N, reconvergência no N+1. Registro sem
+  prefixo nenhum tem um hop por nível, então continua numerado `1..N` como antes.
+  Arestas de leque são sólidas; as arestas de *entrada* de um hop `costura:` são
+  tracejadas. Detalhes e o exemplo em [`docs/data-contract.md`](../data-contract.md) §5.1.
 
 ## Limites conhecidos (v1.3)
 
 - Parser de endpoints é Django/DRF-específico (`router.register` + `path(...as_view)`).
+- Leque de hops, nesta versão: **sem aninhamento** (um hop `ramo:` não abre sub-leque);
+  **duas laterais independentes e adjacentes se fundem num leque de dois** — para
+  separá-las, intercale um hop não-ramo; **um irmão que na verdade termina no meio da
+  cadeia ainda é desenhado reconvergindo** (o registro não tem como dizer o contrário);
+  e **o overlay do mapa é file-level** e deduplica hops consecutivos do mesmo arquivo,
+  então um leque cujos irmãos moram no arquivo do próprio seletor não aparece lá — a
+  cena Fluxo, que é hop-level, mostra.
 - A extração exige Node 22+; o extractor é vendorado em `extractor/` (derivado mínimo da
   fase-1 do Understand-Anything, MIT, commit pinado em `extractor/NOTICE` — nada de clone
   externo nem build TypeScript). Golden test da paridade: `extractor/golden_check.py`.

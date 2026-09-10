@@ -6,8 +6,10 @@ Usage:
 
 Entry points come from three sources, merged in this order: the route parsers listed
 in the config, the entry points declared by the use-cases, and — for a use-case with
-no resolvable declared entry point — its first resolved hop. Duplicates (same file,
-same symbol) collapse into the first occurrence.
+no resolvable declared entry point — its first resolved hop. Entries landing on the
+same file and symbol collapse into one that keeps the declared label, the route a
+parser observed and the names of the use-cases involved (docs/data-contract.md,
+section 6.2).
 
 Call edges: the callee is resolved against the symbols of the same file (internal) or
 against the exports of the imported files (cross-file). Builtins are skipped.
@@ -123,9 +125,10 @@ def run_parsers(config, repo_root, class_file, path_index):
 
 
 def collect_from_usecases(raw_ucs, find_file, totals):
-    """Declared entry points and first-hop fallbacks, in registry order."""
+    """Declared entry points and first-hop fallbacks, in registry order, each tagged
+    with its use-case name and that use-case's position in the registry."""
     declared, fallback = [], []
-    for uc in raw_ucs:
+    for position, uc in enumerate(raw_ucs):
         resolved = resolve_use_case(uc, find_file)
         entries, dropped = resolved['entry_points'], resolved['entry_points_dropped']
 
@@ -136,11 +139,19 @@ def collect_from_usecases(raw_ucs, find_file, totals):
         report_citations(resolved['name'], 'entry points', len(entries),
                          len(entries) + len(dropped), dropped)
 
+        # 'uc' and 'ucpos' travel with the entry only as far as the merge, which
+        # records the name in 'ucs' — ordered on the registry position, since the
+        # merge walks the whole declared list before the fallback one — so the panel
+        # can say which use-cases enter here (data-contract 6.2).
+        for entry in entries:
+            entry['uc'] = resolved['name']
+            entry['ucpos'] = position
         declared.extend(entries)
         if not entries and resolved['hops']:
             hop = resolved['hops'][0]
             fallback.append({'label': resolved['name'], 'kind': 'other', 'i': hop['i'],
-                             'symbol': hop['s'] or None})
+                             'symbol': hop['s'] or None, 'uc': resolved['name'],
+                             'ucpos': position})
     return declared, fallback
 
 

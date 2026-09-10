@@ -8,6 +8,8 @@ Two groups:
 - Tests that need a real extraction (pipeline/build.py end to end, and the
   extractor's own golden_check.py) — these call node and skip cleanly, with a
   message, when node or extractor/node_modules is not available.
+- Layout tests that run a pure JavaScript block extracted from viewer/template.html
+  under node — these need the node binary only, never the extractor.
 
 Reference: docs/data-contract.md, sections 1, 6, 8 and 10.
 """
@@ -19,7 +21,7 @@ import sys
 
 import pytest
 
-from conftest import skip_without_node
+from conftest import skip_without_node, skip_without_node_binary
 
 SCRIPT_TAG = re.compile(r'<script(?:\s[^>]*)?>(.*?)</script>', re.S)
 
@@ -104,6 +106,28 @@ def test_build_data_extra_and_html_for_each_config(
     assert '__MATRYOSHKER_DATA__' not in html
 
 
+def test_declared_entry_point_label_survives_a_route_parser(
+        tmp_path, repo_root, golden_dir, config_dir, example_usecases, config_name):
+    """A label a use-case author wrote must be the same with and without a parser."""
+    extra_path = tmp_path / 'extra.json'
+    result = run_pipeline_script(repo_root, 'prep_extra.py', [
+        '--es', os.path.join(golden_dir, 'es-output.json'),
+        '--imports', os.path.join(golden_dir, 'im-output.json'),
+        '--config', os.path.join(config_dir, config_name),
+        '--ucs', example_usecases,
+        '--repo', os.path.join(repo_root, 'examples', 'sample-drf'),
+        '--out', str(extra_path)])
+    assert result.returncode == 0, result.stderr
+
+    entry_points = json.loads(extra_path.read_text(encoding='utf-8'))['entry_points']
+    borrow = [e for e in entry_points if e['symbol'] == 'BookViewSet']
+    assert len(borrow) == 1, entry_points
+    assert borrow[0]['label'] == 'POST /api/books/{id}/borrow'
+    assert borrow[0]['ucs'] == ['Member borrows a copy of a title']
+    # the parser adds the route it observed instead of replacing the written label
+    assert borrow[0]['route'] == ('/api/books' if config_name == 'example.json' else None)
+    # and its generic label is not left over as an entry point of its own
+    assert [e for e in entry_points if e['label'] == '/api/books'] == []
 # The HTML spec only scans the first 1024 bytes for an encoding declaration, and a
 # document without one is decoded by guessing: over HTTP with no charset in the
 # Content-Type, Chromium falls back to windows-1252 and the map renders mojibake.
@@ -229,3 +253,60 @@ def test_golden_check_against_fresh_extraction(tmp_path, repo_root, golden_dir):
         'extractor/golden_check.py reported a divergence between a fresh extraction '
         'of examples/sample-drf and the committed tests/golden/ fixture (likely stale '
         'relative to the sample repo, not a test bug):\n' + check_result.stdout)
+
+
+GEOMETRY_BLOCK = re.compile(
+    r'// --- pure layout geometry.*?---\n(.*?)// --- end pure layout geometry ---', re.S)
+
+# Drives the extracted block the way layoutPac does and reports what the ticket cares
+# about: the shape of the packed map and whether every label fits inside its own box.
+GEOMETRY_HARNESS = """
+const spec = JSON.parse(process.argv[process.argv.length - 1]);
+const cls = packClusters(spec.map(([key, n]) => [key, Array.from({length: n}, (_, i) => i)]));
+const W = Math.max(...cls.map(c => c.x + c.w)), H = Math.max(...cls.map(c => c.y + c.h));
+let overlap = false;
+for (let i = 0; i < cls.length; i++) for (let j = i + 1; j < cls.length; j++) {
+  const a = cls[i], b = cls[j];
+  if (a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h) overlap = true;
+}
+console.log(JSON.stringify({
+  w: W, h: H, overlap,
+  labels: cls.map(c => ({shown: c.shown, full: c.label,
+                         room: c.w - 2 * PAD, width: textW(c.shown, CLABEL_CHARW)}))}));
+"""
+
+FIXTURE_CLUSTERS = [['catalog', 5], ['lending/handlers', 3], ['lending/services', 3],
+                    ['library', 3], ['catalog/services', 2], ['lending', 2],
+                    ['lending/domain', 2], ['lending/tasks', 2], ['(root)', 1]]
+STRESS_CLUSTERS = [[f'package{i}/subpackage_number_{i}', (i % 17) + 1] for i in range(48)]
+
+
+def run_geometry(viewer_template, tmp_path, clusters):
+    """Run the viewer's pure layout block under node against a list of [key, n_files]."""
+    source = open(viewer_template, encoding='utf-8').read()
+    match = GEOMETRY_BLOCK.search(source)
+    assert match, 'viewer/template.html lost its "pure layout geometry" block'
+    script = tmp_path / 'geometry.mjs'
+    script.write_text(match.group(1) + GEOMETRY_HARNESS, encoding='utf-8')
+    result = subprocess.run(['node', str(script), json.dumps(clusters)],
+                            capture_output=True, text=True, encoding='utf-8')
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout)
+
+
+@pytest.mark.parametrize('clusters', [FIXTURE_CLUSTERS, STRESS_CLUSTERS],
+                         ids=['fixture', 'stress'])
+def test_packages_layout_is_compact_and_labels_fit(viewer_template, tmp_path, clusters):
+    """The packed map must stay near a screen aspect ratio for a small repo and for a
+    much larger one, the cluster boxes must not overlap, and every drawn label must fit
+    inside its own box (the width comes from the content, never from the viewport)."""
+    # only the node binary: this runs a pure JS block out of the template and never
+    # touches the extractor, so extractor/node_modules being absent is irrelevant.
+    skip_without_node_binary()
+    out = run_geometry(viewer_template, tmp_path, clusters)
+    ratio = out['w'] / out['h']
+    assert 0.7 <= ratio <= 2.6, f'aspect ratio {ratio:.2f} for {len(clusters)} clusters'
+    assert not out['overlap'], 'two cluster boxes overlap'
+    for label in out['labels']:
+        assert label['width'] <= label['room'] + 1e-6, label
+        assert label['shown'] == label['full'] or label['shown'].endswith('…'), label

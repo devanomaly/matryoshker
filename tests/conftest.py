@@ -62,19 +62,23 @@ def node_available():
     return os.path.isdir(os.path.join(REPO_ROOT, 'extractor', 'node_modules'))
 
 
-def skip_without_node():
-    """Skip the current test cleanly when a real extraction cannot be run."""
+def skip_without_node_binary():
+    """Skip the current test cleanly when there is no node on PATH.
+
+    For tests that only need the JavaScript engine — e.g. running a block extracted
+    from viewer/template.html — and never touch the extractor, so they must not be
+    skipped just because extractor/node_modules has not been installed.
+    """
     if shutil.which('node') is None:
         pytest.skip('node executable not found on PATH')
+
+
+def skip_without_node():
+    """Skip the current test cleanly when a real extraction cannot be run."""
+    skip_without_node_binary()
     if not os.path.isdir(os.path.join(REPO_ROOT, 'extractor', 'node_modules')):
         pytest.skip('extractor/node_modules missing; run "npm ci --ignore-scripts" in extractor/')
 
-
-def skip_without_node_binary():
-    """Skip when the node binary is missing. Unlike skip_without_node() this does not
-    require extractor/node_modules: the caller only evaluates a snippet of JavaScript."""
-    if shutil.which('node') is None:
-        pytest.skip('node executable not found on PATH')
 
 
 @pytest.fixture(scope='session')
@@ -82,3 +86,6 @@ def require_node():
     """Fixture form of skip_without_node(), for tests that prefer a fixture."""
     skip_without_node()
     return True
+
+
+
