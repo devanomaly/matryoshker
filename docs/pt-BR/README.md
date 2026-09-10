@@ -45,7 +45,9 @@ Mais:
   não tem botão próprio de tema);
 
 tudo num único HTML autocontido (CSP-safe, sem dependências externas além do `<link>` do
-Google Fonts).
+Google Fonts). Esse `<link>` é a única requisição de rede da página: bloqueie-o, ou abra o
+arquivo offline, e o mapa continua funcionando por completo — só as fontes caem para as do
+sistema.
 
 ## Tags epistêmicas
 

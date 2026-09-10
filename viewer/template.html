@@ -95,7 +95,7 @@
   .ep.active{background:var(--accent-soft); color:var(--ink); box-shadow:inset 3px 0 0 var(--accent);}
   .ep .vw{color:var(--ink-3);}
   .star{display:block; width:100%; text-align:left; padding:6px 14px; font-size:.78rem;
-        border-bottom:1px solid var(--line); line-height:1.35;}
+        border-bottom:1px solid var(--line); line-height:1.35; word-break:break-all;}
   .star:hover{background:var(--panel-2);}
   .star .dot{display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px;
              box-shadow:inset 0 0 0 1px var(--ring);}
@@ -210,7 +210,7 @@
 
 <div id="app">
   <aside id="sidebar">
-    <h2 class="sec closed" id="ephdr" hidden><span class="car">&#9662;</span><span data-t="panel.entry_points"></span> <span class="badge" id="epn"></span></h2>
+    <h2 class="sec" id="ephdr" hidden><span class="car">&#9662;</span><span data-t="panel.entry_points"></span> <span class="badge" id="epn"></span></h2>
     <div id="eplist" hidden></div>
     <h2 class="sec closed" id="starhdr"><span class="car">&#9662;</span><span data-t="panel.stars"></span> <span class="badge" id="starn"></span></h2>
     <div id="starlist" hidden></div>
@@ -300,6 +300,7 @@ const UI_STRINGS = {
     'kind.other': 'Other',
     'panel.stars': 'Stars',
     'star.stats': 'UC {uc}/{total} · imp {imp} · calls {calls}',
+    'stars.none': 'No file qualifies yet — a file appears here once a use-case, an import or a call points at it.',
     'panel.usecases': 'Use-cases',
     'badge.seam': 'seam',
     'uc.clear': 'clear selection (Esc)',
@@ -376,6 +377,7 @@ const UI_STRINGS = {
     'kind.other': 'Outros',
     'panel.stars': 'Estrelas',
     'star.stats': 'UC {uc}/{total} · imp {imp} · cham {calls}',
+    'stars.none': 'Nenhum arquivo se qualifica ainda — um arquivo aparece aqui quando um use-case, um import ou uma chamada aponta para ele.',
     'panel.usecases': 'Use-cases',
     'badge.seam': 'seam',
     'uc.clear': 'limpar seleção (Esc)',
@@ -1392,9 +1394,11 @@ function exportStatus(){
 document.querySelector('#sidebar [data-exportst]').addEventListener('click', exportStatus);
 
 // ==================== entry points panel ====================
-// grouped by kind; the whole section (header included) disappears when the map has none
+// grouped by kind; the whole section (header and list) disappears when the map has none,
+// and starts open when it has entries — entry points are the headline navigation
 if (ENTRY_POINTS.length){
   ephdr.hidden = false;
+  eplist.hidden = false;
   document.getElementById('epn').textContent = ENTRY_POINTS.length;
   let html = '';
   for (const kind of KINDS){
@@ -1426,16 +1430,33 @@ eplist.addEventListener('click', e=>{
 });
 
 // ==================== stars panel (most central files) ====================
-// top 20 by ucCount desc, ties by impIn desc; muted categories (tests) stay out of the ranking
+// A file qualifies only when something points at it: at least one use-case, one inbound
+// import or one inbound call. Order: ucCount desc, impIn desc, callIn desc; the sort is
+// stable, so files equal on all three keep file order (the ranking is deterministic).
+// Muted categories (tests) stay out of the ranking; at most STAR_MAX rows.
+const STAR_MAX = 20;
 const starRank = F.map((_,i)=>i)
   .filter(i=> !isMutedCat(F[i].g))
-  .sort((a,b)=> ucCount[b]-ucCount[a] || impIn[b]-impIn[a])
-  .slice(0, 20);
+  .filter(i=> ucCount[i] > 0 || impIn[i] > 0 || callIn[i] > 0)
+  .sort((a,b)=> ucCount[b]-ucCount[a] || impIn[b]-impIn[a] || callIn[b]-callIn[a])
+  .slice(0, STAR_MAX);
+// rows whose base name repeats in the list show their parent folder (and, if that still
+// repeats, the full path), so two "models.py" are told apart; the title keeps the path
+const starLabel = (function(){
+  const tail = (p, n) => p.split('/').slice(-n).join('/');
+  const count = n => { const m = new Map();
+    starRank.forEach(i=>{ const k = tail(F[i].p, n); m.set(k, (m.get(k) || 0) + 1); }); return m; };
+  const c1 = count(1), c2 = count(2);
+  return i => c1.get(tail(F[i].p, 1)) === 1 ? tail(F[i].p, 1)
+            : c2.get(tail(F[i].p, 2)) === 1 ? tail(F[i].p, 2) : F[i].p;
+})();
 document.getElementById('starn').textContent = starRank.length;
-document.getElementById('starlist').innerHTML = starRank.map(i=>
-  `<button class="star" data-star="${i}" title="${esc(F[i].p)}">
-    <span class="dot" style="background:${CATCOLOR(F[i].g)}"></span>${esc(baseName(F[i].p))}<br>
-    <span class="starnums">${esc(t('star.stats', {uc:ucCount[i], total:UCS.length, imp:impIn[i], calls:callIn[i]}))}</span></button>`).join('');
+document.getElementById('starlist').innerHTML = starRank.length
+  ? starRank.map(i=>
+      `<button class="star" data-star="${i}" title="${esc(F[i].p)}">
+        <span class="dot" style="background:${CATCOLOR(F[i].g)}"></span>${esc(starLabel(i))}<br>
+        <span class="starnums">${esc(t('star.stats', {uc:ucCount[i], total:UCS.length, imp:impIn[i], calls:callIn[i]}))}</span></button>`).join('')
+  : `<div class="empty">${esc(t('stars.none'))}</div>`;
 document.getElementById('starhdr').addEventListener('click', function(){
   this.classList.toggle('closed');
   const l = document.getElementById('starlist');

@@ -112,8 +112,10 @@ via a PR. The versioned registry file is the only collective source of truth.
 ### Viewer (`viewer/template.html`)
 
 - One single file, **zero external dependencies** (the only tolerated exception is the
-  Google Fonts `<link>`; nothing else, no CDN — the artifact CSP forbids it). No
-  framework: vanilla SVG + DOM.
+  Google Fonts `<link>`; nothing else, no CDN — the artifact CSP forbids it). That `<link>`
+  is the page's only network request and the viewer must stay fully functional when it
+  fails: keep a generic fallback (`sans-serif`, `monospace`, `system-ui`) at the end of
+  every `font-family`. No framework: vanilla SVG + DOM.
 - Themes: every color goes through CSS tokens defined in the three theme blocks
   (`:root` light, the guarded `prefers-color-scheme: dark` media query, and
   `:root[data-theme="dark"]`). A color defined in only one block is a bug.
@@ -240,9 +242,13 @@ can download and open.
    preference, or force `data-theme="dark"` / `data-theme="light"` on `<html>` via
    devtools) and, if you touched anything in `UI_STRINGS`, in both languages
    (`config.lang`: `en` and `pt-BR`).
-4. Use-case overlay: select a use-case, check the badges/arrows, and that Esc goes up one
+4. If you touched a sidebar panel, check it in both of its states: with data (entry points
+   open by default, stars listing only files something points at) and without (a build made
+   with no `--ucs`, where the entry-points section is absent and the stars list shows its
+   empty-state message).
+5. Use-case overlay: select a use-case, check the badges/arrows, and that Esc goes up one
    level at a time until the selection clears.
-5. Click a file from the overlay and check the *Use-cases passing here* block (the
+6. Click a file from the overlay and check the *Use-cases passing here* block (the
    reverse index) — it is what breaks first when a hop → file link changes.
 6. If you touched `viewer/template.html` or `pipeline/`: install the harness
    dependencies (see above), run `python tools/visual_review.py run`, and paste the
