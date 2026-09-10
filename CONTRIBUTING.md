@@ -123,6 +123,12 @@ via a PR. The versioned registry file is the only collective source of truth.
   stable internal name — never rename it: `inject.py` aborts if it is missing); the
   viewer knows nothing about any specific repo.
 - Repo-specific logic inside the viewer is a defect. It belongs in `config/` or `data/`.
+- Layout is deterministic: it may read only the embedded data and the layout constants —
+  never the viewport, the clock, randomness, or measured text (`getComputedTextLength`).
+  Estimate text width from the character count instead; the saved drag offsets are deltas
+  over the base positions and are keyed per commit. The block between the
+  `// --- pure layout geometry` markers must stay free of DOM and globals: a test extracts
+  it and runs it under node (`tests/test_e2e.py`).
 
 ### Pipeline (`pipeline/*.py`)
 

@@ -1092,6 +1092,29 @@ Context.
   consecutive hops of the same file, so a fan whose siblings share the selector's file
   does not appear there (§5.1).
 
+### 13.6 Scene layout (determinism)
+
+The layout of every scene is a pure function of the embedded object. It MUST NOT read the
+viewport (`clientWidth`/`clientHeight`, media queries), the wall clock or a random source,
+and MUST NOT measure rendered text (`getComputedTextLength`, canvas metrics): the same
+data must always produce the same map, because the drag offsets saved in
+`mtk:<repo>@<commit>:pos` are deltas over these base positions.
+
+- Packages and Context pack their boxes with a shelf-packing helper whose shelf width is
+  derived from the packed content: `max(widest box, sqrt(total area × 1.8))`, where the
+  total area sums `(w + column gap) × (h + row gap)` over the boxes. No constant caps the
+  width of the map.
+- A cluster box is as wide as the wider of its node grid and its label, the label
+  contribution being capped (210 units in Packages, 240 in Context). Text width is
+  estimated from the character count of the monospace label (East Asian wide code points
+  count as two cells), never measured.
+- A label that does not fit is clipped with `…` using the same estimate, so a label can
+  never leave its own box and two labels can never overlap. The untruncated text stays
+  available as an SVG `<title>`: on the label in Packages, and on the box group in
+  Context, where it is emitted only when the name was actually clipped, so an untruncated
+  box carries no native tooltip repeating the label it already shows.
+- `fit()` and `centerOn()` are view operations, not layout: they may read the viewport.
+
 ---
 
 ## 14. JSON Schemas
