@@ -5,6 +5,7 @@ node_modules/
 ua/
 out/
 site/
+visual-review/
 *.local.*
 es-input.json
 im-input.json

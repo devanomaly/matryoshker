@@ -123,6 +123,12 @@ via a PR. The versioned registry file is the only collective source of truth.
   stable internal name — never rename it: `inject.py` aborts if it is missing); the
   viewer knows nothing about any specific repo.
 - Repo-specific logic inside the viewer is a defect. It belongs in `config/` or `data/`.
+- Layout is deterministic: it may read only the embedded data and the layout constants —
+  never the viewport, the clock, randomness, or measured text (`getComputedTextLength`).
+  Estimate text width from the character count instead; the saved drag offsets are deltas
+  over the base positions and are keyed per commit. The block between the
+  `// --- pure layout geometry` markers must stay free of DOM and globals: a test extracts
+  it and runs it under node (`tests/test_e2e.py`).
 
 ### Pipeline (`pipeline/*.py`)
 
@@ -152,10 +158,71 @@ via a PR. The versioned registry file is the only collective source of truth.
 5. Document the new parser's config keys in `docs/data-contract.md` if you're proposing a
    contract change, or in the module docstring otherwise.
 
+### Visual review harness (`tools/visual_review.py`)
+
+A committed harness that builds the bundled fixture with both configs and drives the
+result in a real browser, so the numbers in a PR body are reproducible instead of coming
+from a throwaway script:
+
+```bash
+pip install -r requirements-dev.txt       # only for this harness; pytest alone is enough
+                                          # for the test suite
+python -m playwright install chromium     # one-off browser download
+python tools/visual_review.py run
+```
+
+**What it writes, and where.** Everything goes under `--out`, which defaults to
+`visual-review/` at the root of this checkout — a gitignored directory alongside `out/`
+and `site/`, removed and recreated on every run, marked with a `.visual-review-out` file
+so a crashed run never blocks the next one. Pass `--out /somewhere/else` to put it
+anywhere; the harness refuses an `--out` inside the repository being *mapped*
+(`examples/sample-drf`), which it never writes to. CI passes a path under the runner's
+temp directory, so the checkout it tests is exactly the checkout `actions/checkout` made.
+
+The directory holds the built demo HTML for both configs, one PNG per named state
+(14 states × 4 runs — light/dark, `config/example.json` / `config/example-ddd.json`,
+`en` / `pt-BR`), `metrics.json` and a Markdown `report.md` (world bounding box and aspect
+per scene, drawn node/cluster/edge counts, cluster labels that overrun their box or
+overlap another, entry points by kind, stars rows and how many read all zeros, page
+errors, external requests, and which sidebar panels are present, open and how many rows
+they hold). Run `python tools/visual_review.py list` for the run and state names.
+
+**Where the pieces live.** `tools/visual_review.py` is the harness itself; beside it,
+`tools/config.py` holds the run matrix and the canonical state list, and
+`tools/probes.py` holds the two blobs of JavaScript that are evaluated inside the page
+(they are strings, executed in Chromium, never imported by Python). Adding a state means
+editing `config.py` and then `drive()`/`check_state()` in the harness.
+
+Each state drives the UI and then asserts the condition its own name claims, so a change
+to which panels start open moves a number in the table instead of breaking the run:
+panels are opened by reading their state and clicking only if needed, never by a blind
+toggle.
+
+To show what your change moved, run it on the merge base and diff:
+
+```bash
+git worktree add /tmp/mtk-base "$(git merge-base HEAD origin/main)"
+python tools/visual_review.py run --repo-root /tmp/mtk-base --out /tmp/vr-base
+python tools/visual_review.py run --out /tmp/vr-head
+python tools/visual_review.py diff --before /tmp/vr-base/metrics.json \
+    --after /tmp/vr-head/metrics.json
+git worktree remove /tmp/mtk-base
+```
+
+Playwright is a development dependency only: `pipeline/`, the viewer and
+`python -m pytest -q` never need it. Screenshots are comparable within one environment;
+fonts differ between environments (the Google Fonts request succeeds on a networked
+runner and fails offline), so do not compare PNGs across machines. CI runs the harness on
+every pull request into the runner's temp directory, puts the metrics table in the job
+summary and uploads the output — including the built HTML — as a workflow artifact you
+can download and open.
+
 ### Pre-PR checklist
 
 0. Install the test dependency once: `pip install pytest` (the pipeline itself stays
-   pure standard library; pytest is only needed to run the suite).
+   pure standard library; pytest is only needed to run the suite). The visual-review
+   harness in step 6 needs Playwright and a browser download — install those from
+   `requirements-dev.txt` only when you get to it.
 1. Run the test suite: `python -m pytest -q` (the root `pytest.ini` points it at
    `tests/` and keeps it out of `examples/`, which is a fixture, not a test target).
 2. Build the fixture and check the generated `<script>` parses as JavaScript:
@@ -181,6 +248,12 @@ via a PR. The versioned registry file is the only collective source of truth.
    still unwinds one level at a time.
 6. Click a file from the overlay and check the *Use-cases passing here* block (the
    reverse index) — it is what breaks first when a hop → file link changes.
+6. If you touched `viewer/template.html` or `pipeline/`: install the harness
+   dependencies (see above), run `python tools/visual_review.py run`, and paste the
+   metrics table (or the merge-base diff) into the PR body. It does not replace steps
+   3–5 — those are you *looking* at the map, and no counter catches a map that is
+   technically correct and unreadable. The harness makes the numbers you quote
+   reproducible, and gives a reviewer 56 screenshots to eyeball.
 
 Small, single-purpose PRs. Describe what changes for the map's user, not only what
 changes in the code.
