@@ -255,6 +255,10 @@ can download and open.
    empty-state message).
 5. Use-case overlay: select a use-case, check the badges/arrows, and that Esc goes up one
    level at a time until the selection clears.
+5. Flow sources: with a use-case selected, click an entry point in the sidebar (and, from
+   Symbols, *call tree from here*) and check that Flow draws what you just picked; clear
+   it with the crumb `×` and check that Flow falls back to the use-case; check that Esc
+   still unwinds one level at a time.
 6. Click a file from the overlay and check the *Use-cases passing here* block (the
    reverse index) — it is what breaks first when a hop → file link changes.
 6. If you touched `viewer/template.html` or `pipeline/`: install the harness

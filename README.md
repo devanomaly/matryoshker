@@ -23,7 +23,7 @@ Matryoshker is a thin curation and visualization layer over such primitives.
 | **Context** | C1 | packages as boxes + aggregated import edges (thickness = import count); the entry-point lens dims what a depth-2 BFS does not reach |
 | **Packages** | C2 | every file in package clusters, colored by category; clusters are packed into a compact grid whose size comes from the data, not from the window |
 | **Symbols** | C3–C4 | double-click a file: classes/functions as pills + internal and cross-file calls as edges |
-| **Flow** | — | only appears with a use-case or entry point active: UC → numbered vertical chain of hops, fanned out where the registry marks siblings with `branch:`; entry point → top-down call tree |
+| **Flow** | — | only appears with a use-case or entry point active, and draws whichever of them you selected last: UC → numbered vertical chain of hops, fanned out where the registry marks siblings with `branch:`; entry point (or a call tree launched from Symbols) → top-down call tree |
 
 More:
 

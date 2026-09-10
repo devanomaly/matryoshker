@@ -80,6 +80,7 @@ def skip_without_node():
         pytest.skip('extractor/node_modules missing; run "npm ci --ignore-scripts" in extractor/')
 
 
+
 @pytest.fixture(scope='session')
 def require_node():
     """Fixture form of skip_without_node(), for tests that prefer a fixture."""
@@ -87,11 +88,4 @@ def require_node():
     return True
 
 
-def skip_without_node_binary():
-    """Skip the current test when the `node` executable is missing.
 
-    Weaker gate than skip_without_node(): tests that only run a snippet of the
-    viewer's JavaScript need the interpreter, not the extractor's node_modules.
-    """
-    if shutil.which('node') is None:
-        pytest.skip('node executable not found on PATH')
