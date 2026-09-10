@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>Matryoshker</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
@@ -745,13 +746,23 @@ function renderPac(){
 function paintState(){
   if (scene !== 'pac') return;
   const ucSet = new Set();
-  let seq = [];
+  let seq = [], rows = [];
   if (activeUC >= 0){
     for (const h of UCS[activeUC].hops) if (pos[h.i]) ucSet.add(h.i);
-    for (const h of UCS[activeUC].hops){
-      if (!pos[h.i]) continue;
-      if (!seq.length || seq[seq.length-1] !== h.i) seq.push(h.i);
+    // one row per level (data-contract 5.1), each holding the distinct files its
+    // hops point at. This overlay is file-level and dedups consecutive hops of the
+    // same file, so a fan whose siblings share the selector's file collapses here;
+    // the Flow scene, which is hop-level, still shows it.
+    for (const lv of groupHops(UCS[activeUC].hops)){
+      const row = [];
+      for (const h of lv.hops){
+        if (!pos[h.i] || row.includes(h.i)) continue;
+        if (rows.length && rows[rows.length-1].length === 1 && rows[rows.length-1][0] === h.i) continue;
+        row.push(h.i);
+      }
+      if (row.length) rows.push(row);
     }
+    for (const row of rows) for (const i of row) if (!seq.includes(i)) seq.push(i);
   }
   world.querySelectorAll('.node').forEach(el=>{
     const i = +el.dataset.i;
@@ -762,14 +773,23 @@ function paintState(){
   const ov = world.querySelector('#overlay');
   if (!ov) return;
   let s = '';
-  if (activeUC >= 0 && seq.length){
-    for (let j=0;j<seq.length-1;j++){
-      const a = nodeCenter(seq[j]), b = nodeCenter(seq[j+1]);
-      if (!a || !b) continue;
-      s += `<path class="flowline" marker-end="url(#arr)" d="${liftedCurve(a, b, 70, 0.22)}"/>`;
+  if (activeUC >= 0 && rows.length){
+    // edges: cartesian product between consecutive levels, as in the Flow scene
+    for (let j=0;j<rows.length-1;j++){
+      for (const ai of rows[j]) for (const bi of rows[j+1]){
+        const a = nodeCenter(ai), b = nodeCenter(bi);
+        if (!a || !b || ai === bi) continue;
+        s += `<path class="flowline" marker-end="url(#arr)" d="${liftedCurve(a, b, 70, 0.22)}"/>`;
+      }
     }
+    // badge per file: the level number, suffixed a/b/c when the level is a fan
     const order = new Map();
-    seq.forEach(i=>{ if(!order.has(i)) order.set(i, order.size+1); });
+    rows.forEach((row, j)=>{
+      row.forEach((i, k)=>{
+        if (order.has(i)) return;
+        order.set(i, (j+1) + (row.length > 1 ? String.fromCharCode(97+k) : '.'));
+      });
+    });
     for (const [i,n] of order){
       const c = nodeCenter(i);
       s += `<g class="fbadge"><circle cx="${c.x-7}" cy="${c.y-9}" r="9"/><text x="${c.x-7}" y="${c.y-9}">${n}</text></g>`;
@@ -979,26 +999,75 @@ function callTreeSvg(rootI, rootSym){
   })(root);
   return s;
 }
+// --- fan-out grouping (data-contract 5.1) ---
+// Groups hops into levels. A hop whose derived kind is 'branch' is a sibling: a
+// consecutive run of them is ONE level (a fan) whose members are alternatives
+// chosen at the preceding level. Anything else opens a level of its own. `n` is
+// 1-based and counts levels, not hops, so a registry with no role prefixes gets
+// one hop per level and the 1..N numbering the viewer has always shown.
+// Pure by contract: no DOM, no globals, no layout constants — tests/test_viewer_fanout.py
+// extracts this block between the sentinels and runs it under bare `node`.
+function groupHops(hops){
+  const levels = [];
+  for (const h of hops){
+    const isBranch = h && h.k === 'branch';
+    const last = levels.length ? levels[levels.length - 1] : null;
+    if (isBranch && last && last.fan){ last.hops.push(h); continue; }
+    levels.push({n: levels.length + 1, fan: !!isBranch, hops: [h]});
+  }
+  return levels;
+}
+// --- end fan-out grouping ---
+
+// The drawn label drops the role prefix that groupHops() already consumed; the
+// text itself stays verbatim in h.r (and in the detail panel). Cutting the token
+// before the first ':' keeps the prefix vocabulary in the pipeline alone.
+function hopRoleText(h){
+  return h.k ? h.r.replace(/^[^:]{1,12}:\s*/, '') : h.r;
+}
+// Level label: '3.' for a step, '3a' / '3b' / '3c' for the siblings of a fan.
+function hopLabel(level, k){
+  return level.fan ? level.n + String.fromCharCode(97 + k) : level.n + '.';
+}
 // precedence in the Flow scene: active use-case > active entry point > call tree root
 function renderFlow(){
   let s = '';
   if (activeUC >= 0){
-    // use-case flow: hops in a vertical column
+    // use-case flow: one row per level; the siblings of a fan share a row
     const u = UCS[activeUC];
-    const W = 470, X = 0;
-    let y = 0;
-    u.hops.forEach((h, idx)=>{
-      const f = F[h.i];
-      const label = baseName(f.p) + (h.s ? ' : ' + h.s : '');
-      const role = h.r.length > 66 ? h.r.slice(0, 65) + '…' : h.r;
-      s += `<g data-i="${h.i}" style="cursor:pointer">
-        <rect class="flownode" x="${X}" y="${y}" width="${W}" height="46" rx="9" style="stroke:${CATCOLOR(f.g)}"/>
-        <text class="flowt1" x="${X+12}" y="${y+19}">${idx+1}. ${esc(label)}</text>
-        <text class="flowt2" x="${X+12}" y="${y+36}">${esc(role)}</text></g>`;
-      if (idx < u.hops.length - 1)
-        s += `<path class="flowline" marker-end="url(#arr)" d="M${X+W/2},${y+46} L${X+W/2},${y+63}"/>`;
-      y += 64;
+    const levels = groupHops(u.hops);
+    const W = 470, GAP = 26, H = 46, ROW = 64;
+    // A fan of one still sits off the main line, so it never reads as a step.
+    const widthOf = lv => lv.fan ? Math.max(300, (W - GAP) / 2) : W;
+    const spanOf = lv => lv.hops.length * widthOf(lv) + (lv.hops.length - 1) * GAP;
+    const totalW = Math.max(...levels.map(spanOf));
+    const boxes = levels.map((lv, li) => {
+      const w = widthOf(lv), y = li * ROW;
+      // a fan is centered on the main line; a lone sibling is offset to its right
+      const span = spanOf(lv);
+      const x0 = lv.fan && lv.hops.length === 1 ? (totalW - W) / 2 + GAP + W / 2
+                                                : (totalW - span) / 2;
+      return lv.hops.map((h, k) => ({h, lv, k, w, y, x: x0 + k * (w + GAP)}));
     });
+    // edges: cartesian product between consecutive levels (1xN, Nx1, 1x1)
+    for (let li = 0; li < boxes.length - 1; li++){
+      for (const a of boxes[li]) for (const b of boxes[li + 1]){
+        // a seam hop is entered through a dashed edge; fan edges stay solid
+        const dash = b.h.k === 'seam' ? ' stroke-dasharray="6 4"' : '';
+        s += `<path class="flowline" marker-end="url(#arr)"${dash} d="M${a.x+a.w/2},${a.y+H} C${a.x+a.w/2},${a.y+H+9} ${b.x+b.w/2},${b.y-9} ${b.x+b.w/2},${b.y}"/>`;
+      }
+    }
+    for (const row of boxes) for (const b of row){
+      const h = b.h, f = F[h.i];
+      const label = baseName(f.p) + (h.s ? ' : ' + h.s : '');
+      const raw = hopRoleText(h);
+      const cap = Math.max(20, Math.round(b.w / 7.1));
+      const role = raw.length > cap ? raw.slice(0, cap - 1) + '…' : raw;
+      s += `<g data-i="${h.i}" style="cursor:pointer">
+        <rect class="flownode" x="${b.x}" y="${b.y}" width="${b.w}" height="${H}" rx="9" style="stroke:${CATCOLOR(f.g)}"/>
+        <text class="flowt1" x="${b.x+12}" y="${b.y+19}">${esc(hopLabel(b.lv, b.k))} ${esc(label)}</text>
+        <text class="flowt2" x="${b.x+12}" y="${b.y+36}">${esc(role)}</text></g>`;
+    }
     s = `<text class="classhdr" x="0" y="-18">${esc(u.name)}</text>` + s;
   } else if (activeEp >= 0){
     // entry point: call tree from the file where execution enters

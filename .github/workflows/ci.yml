@@ -44,3 +44,61 @@ jobs:
 
       - name: Run the test suite
         run: python -m pytest -q tests
+
+  # Builds the demo map with both bundled configs and drives it in a real browser, so a
+  # reviewer can download the HTML and read the metrics table instead of trusting numbers
+  # pasted from a throwaway script. Ubuntu only on purpose: this is one job, not a matrix
+  # leg. It needs no permission beyond the workflow-level `contents: read` — no PR comment
+  # is posted here; that escalation belongs with the per-PR Pages preview, later.
+  visual-review:
+    name: visual review (ubuntu)
+    runs-on: ubuntu-latest
+    # Two demo builds and 4 runs x 14 states in a headless browser take about three
+    # minutes; this is a ceiling on a hung browser, not a target.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the harness dependencies
+        run: pip install -r requirements-dev.txt
+
+      # requirements-dev.txt pins playwright exactly, so this file's hash really does
+      # identify the browser build the job needs.
+      - name: Cache the Playwright browser
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('requirements-dev.txt') }}
+
+      - name: Install Chromium for Playwright
+        run: python -m playwright install --with-deps chromium
+
+      # The demo is built from the committed golden extraction (tests/golden/), so this
+      # job needs neither Node nor `npm ci`. --out goes under the runner's temp directory
+      # so the checkout stays exactly as `actions/checkout` left it; locally the default
+      # is `visual-review/` at the repository root, which .gitignore covers.
+      - name: Build the demo maps and run the visual-review harness
+        run: python tools/visual_review.py run --out "$RUNNER_TEMP/visual-review"
+
+      - name: Metrics table into the job summary
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/visual-review/report.md" ]; then
+            cat "$RUNNER_TEMP/visual-review/report.md" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "The visual-review harness produced no report." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload the demo HTML, the screenshots and the metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-review-${{ github.event.pull_request.number || github.sha }}
+          path: ${{ runner.temp }}/visual-review
+          if-no-files-found: warn
+          retention-days: 14
