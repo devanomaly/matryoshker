@@ -21,9 +21,9 @@ Matryoshker is a thin curation and visualization layer over such primitives.
 | Scene | C4 level | What it shows |
 |---|---|---|
 | **Context** | C1 | packages as boxes + aggregated import edges (thickness = import count); the entry-point lens dims what a depth-2 BFS does not reach |
-| **Packages** | C2 | every file in package clusters, colored by category |
+| **Packages** | C2 | every file in package clusters, colored by category; clusters are packed into a compact grid whose size comes from the data, not from the window |
 | **Symbols** | C3–C4 | double-click a file: classes/functions as pills + internal and cross-file calls as edges |
-| **Flow** | — | only appears with a use-case or entry point active: UC → numbered vertical chain of hops; entry point → top-down call tree |
+| **Flow** | — | only appears with a use-case or entry point active: UC → numbered vertical chain of hops, fanned out where the registry marks siblings with `branch:`; entry point → top-down call tree |
 
 More:
 
@@ -120,6 +120,16 @@ use-case registry, or an entry-point parser. The JSON Schemas in
 support and for CI jobs that choose to install a validator; the pipeline itself has no
 schema-validator dependency.
 
+**Role prefixes on hops.** A hop's role may open with `branch:` / `ramo:` (a sibling: one
+of N alternatives chosen at the preceding hop) or `seam:` / `costura:` (the hop crosses a
+seam — disk, HTTP, subprocess, a human step). A *consecutive* run of `branch:` hops is
+one level of the flow, drawn side by side between its selector and its reconvergence, and
+**numbering is by level**: the siblings are `Na`, `Nb`, `Nc`. A registry that uses no
+prefixes has one hop per level and keeps its `1..N` chain unchanged. `seam:` draws that
+hop's incoming edges dashed. The registry format does not change — the prefix is ordinary
+role text, and the pipeline derives an optional `ucs[].hops[].k` from it (section 5.1 of
+the data contract).
+
 ## Known limits
 
 - The only bundled entry-point parser is Django/DRF-specific
@@ -136,6 +146,13 @@ schema-validator dependency.
   skipped) or thinner (`this.method()` resolves on `this`). Files, imports, symbols and
   use-case hops are language-neutral; only the call edges carry this bias (section 8 of
   the data contract).
+- Hop fan-out, in this version: **no nesting** (a `branch:` hop cannot open a sub-fan);
+  **two independent adjacent lateral alternatives merge into one fan of two** — adjacency
+  is all the grammar has, so put a non-branch hop between them to keep them apart; **a
+  sibling that actually terminates mid-chain is still drawn reconverging** (the registry
+  has no way to say otherwise); and **the map overlay is file-level**, dedupping
+  consecutive hops of the same file, so a fan whose siblings live in the selector's own
+  file does not appear there — the Flow panel, which is hop-level, does show it.
 - A map published as a static artifact (e.g. a Claude Artifact) is a snapshot: keeping it
   fresh per branch requires generating the HTML in CI and hosting it, which is on the
   roadmap.

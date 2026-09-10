@@ -281,6 +281,8 @@ viewer only ever contain canonical values.
     "hops": [
       "src/api/views.py:BookViewSet.create — validates the payload and dispatches",
       "src/domain/commands.py:RegisterBookHandler.handle — central rule",
+      "src/domain/isbn.py:validate_isbn13 — branch: ISBN-13, checksum over 12 digits",
+      "src/domain/isbn.py:validate_isbn10 — branch: legacy ISBN-10, X allowed as check digit",
       "src/infra/repositories.py:BookRepository.add — persists the aggregate"
     ],
     "async_legs": [],
@@ -293,6 +295,10 @@ viewer only ever contain canonical values.
   }
 ]
 ```
+
+The two `branch:` hops are siblings, not a sequence: the handler picks one validator by
+ISBN length and both reconverge on `BookRepository.add`. The viewer draws them as level
+`3a` / `3b` side by side, with `add` at level 4 (§5.1).
 
 ---
 
@@ -315,6 +321,49 @@ and the reporting format; they differ only in what surrounds the citation.
   symbol is stripped.
 - `<role>` is free text describing what the hop does (14 words or fewer recommended);
   it is truncated at **140 characters** (`ROLE_MAX_LEN`).
+
+**Role prefixes.** A role MAY open with one of four words followed by a colon. The word
+is matched case-insensitively and only at the very start of the role, so `picks the
+branch: left or right` is ordinary prose, not a prefix.
+
+| Prefix (en) | Prefix (pt) | Derived `hops[].k` | Meaning |
+|---|---|---|---|
+| `branch:` | `ramo:` | `"branch"` | a sibling: one of N alternatives chosen at the preceding hop |
+| `seam:` | `costura:` | `"seam"` | the hop crosses a seam — disk, HTTP, subprocess, a human step |
+
+The prefix stays inside `r` verbatim (§7.4); the derived kind is emitted separately so
+the viewer never re-parses role text and the vocabulary lives in `pipeline/usecases.py`
+alone. A registry with no prefixes emits no `k` at all and its `data.json` is byte for
+byte what it was before fan-out existed.
+
+**Fan semantics.** `hops` stays a flat array in execution order; the fan is derived from
+adjacency:
+
+- **selector** — the last non-`branch` hop before a run of `branch` hops;
+- **siblings** — the *consecutive* run of `branch` hops. The whole run occupies **one
+  level**, drawn side by side;
+- **reconvergence** — the next non-`branch` hop, which receives one edge from each
+  sibling.
+
+**Numbering is by level, not by hop.** The selector is level N-1, every sibling is level
+N and is labeled `Na`, `Nb`, `Nc`, the reconvergence is level N+1. A registry with one
+hop per level — which is any registry without role prefixes — therefore numbers `1..N`,
+exactly as before. Edges are the cartesian product between consecutive levels, which
+covers selector→fan (1×N), fan→reconvergence (N×1) and step→step (1×1) with one rule;
+two fans are never adjacent by construction, so N×M cannot arise. A run of length 1 is
+still a fan: it is drawn off the main line, so a lone `branch:` between two ordinary hops
+does not read as a step.
+
+**Limitations, deliberate in this version.**
+
+- **No nesting.** A `branch:` hop cannot itself open a sub-fan.
+- **Two independent adjacent lateral alternatives merge into one fan of two.** Adjacency
+  is all the grammar has. To express them separately, put a non-branch hop between them.
+- **A sibling that actually terminates mid-chain is still drawn reconverging.** An error
+  path is not a step toward the next hop, and the registry has no way to say so.
+- **The map overlay is file-level** and dedups consecutive hops of the same file, so a
+  fan whose siblings live in the selector's own file cannot appear there. The Flow panel
+  is hop-level and does show it.
 
 ### 5.2 Entry-point citation
 
@@ -591,7 +640,8 @@ imports, the entry-point lens = BFS of depth 2 over out-edges, the `impIn` centr
 ```
 { "name": "Librarian registers a new book", "actor": "Librarian", "goal": "…",
   "seam": false, "rules": ["ISBN must be unique"], "status": "inferred",
-  "hops": [ { "i": 12, "s": "BookViewSet.create", "r": "validates the payload and dispatches" } ] }
+  "hops": [ { "i": 12, "s": "BookViewSet.create", "r": "validates the payload and dispatches" },
+            { "i": 18, "s": "validate_isbn13", "r": "branch: ISBN-13, checksum over 12 digits", "k": "branch" } ] }
 ```
 
 | Key | Type | Source |
@@ -602,7 +652,13 @@ imports, the entry-point lens = BFS of depth 2 over out-edges, the `impIn` centr
 | `seam` | boolean | `bool(seam_crossing)` |
 | `rules` | array of strings | `rules` (`regras_envolvidas`) |
 | `status` | canonical status | `status` after alias mapping |
-| `hops` | array of `{i, s, r}` | resolved hops only, in registry order; `s` is `""` when the citation had no symbol |
+| `hops` | array of `{i, s, r}` plus optional `k` | resolved hops only, in registry order; `s` is `""` when the citation had no symbol |
+
+`hops[].k` is derived from the role prefix of §5.1 and is one of `"branch"` or `"seam"`.
+It is **omitted** when the role has no prefix, so a registry that uses none produces the
+same bytes it always did. `r` is unaffected: it keeps the prefix verbatim, which is what
+the detail panel shows an author fixing the registry file. Consumers that do not care
+about fan-out can ignore `k` entirely.
 
 Registry order is preserved. A use-case with zero resolved hops is still emitted (it
 shows in the panel with `Hops (0)`). The viewer derives `ucByFile` (reverse index
@@ -1031,6 +1087,41 @@ Context.
   Portuguese values simply stop applying).
 - The export snippet is `{ "<name>": "<canonical status>" }`.
 - `localStorage` keys are unchanged: `mtk:<repo>@<commit>:pos`, `:st`, `:hidef`.
+- The Flow scene groups `hops` into levels with `groupHops()` per §5.1 and draws each
+  level as a row, the siblings of a fan side by side. Fan edges are **solid** — same
+  stroke as an ordinary step; a `"seam"` hop's *incoming* edges are **dashed**, and the
+  two compose (a sibling that is also a seam is entered dashed while its peers are not).
+  The role prefix is dropped from the drawn label — the token up to the first `:` — and
+  the pipeline's `k` decides whether there is one to drop, so the vocabulary is not
+  duplicated in the viewer.
+- The **detail panel** is unaffected: it lists the registry's own lines in JSON order,
+  prefix visible, because that is what an author needs when correcting the file.
+- The map overlay applies the same level grouping, but it is file-level and dedups
+  consecutive hops of the same file, so a fan whose siblings share the selector's file
+  does not appear there (§5.1).
+
+### 13.6 Scene layout (determinism)
+
+The layout of every scene is a pure function of the embedded object. It MUST NOT read the
+viewport (`clientWidth`/`clientHeight`, media queries), the wall clock or a random source,
+and MUST NOT measure rendered text (`getComputedTextLength`, canvas metrics): the same
+data must always produce the same map, because the drag offsets saved in
+`mtk:<repo>@<commit>:pos` are deltas over these base positions.
+
+- Packages and Context pack their boxes with a shelf-packing helper whose shelf width is
+  derived from the packed content: `max(widest box, sqrt(total area × 1.8))`, where the
+  total area sums `(w + column gap) × (h + row gap)` over the boxes. No constant caps the
+  width of the map.
+- A cluster box is as wide as the wider of its node grid and its label, the label
+  contribution being capped (210 units in Packages, 240 in Context). Text width is
+  estimated from the character count of the monospace label (East Asian wide code points
+  count as two cells), never measured.
+- A label that does not fit is clipped with `…` using the same estimate, so a label can
+  never leave its own box and two labels can never overlap. The untruncated text stays
+  available as an SVG `<title>`: on the label in Packages, and on the box group in
+  Context, where it is emitted only when the name was actually clipped, so an untruncated
+  box carries no native tooltip repeating the label it already shows.
+- `fit()` and `centerOn()` are view operations, not layout: they may read the viewport.
 
 ### 13.6 Stars panel
 
