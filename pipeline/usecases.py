@@ -30,6 +30,15 @@ LEAD_TRIM = re.compile(r'\s*[(\[{]*\s*$')
 # en dash (U+2013) or a plain hyphen.
 TAIL_TRIM = re.compile('^' + r'\s*[)\]}]*\s*(?:[' + chr(0x2014) + chr(0x2013) + r'-]\s*)?')
 
+# Role prefix of a hop, e.g. "branch: " / "ramo: ". Recognized in English and in
+# Portuguese, case-insensitively, and only at the very start of the role text
+# (data-contract 5.1). The prefix stays inside the role; the derived kind is
+# emitted separately as hops[].k so the viewer never re-parses role text.
+ROLE_PREFIX = re.compile(r'^(branch|ramo|seam|costura)\s*:\s*', re.I)
+
+# Role prefix word -> canonical hops[].k value.
+ROLE_KINDS = {'branch': 'branch', 'ramo': 'branch', 'seam': 'seam', 'costura': 'seam'}
+
 # The role of a hop (and the free text of an entry point) is truncated here.
 ROLE_MAX_LEN = 140
 
@@ -183,14 +192,33 @@ def _resolve_citation(text, find_file):
     return None, None, first_reason
 
 
+def role_kind(role):
+    """The canonical kind of a role prefix, or None when the role has none.
+
+    Only a prefix counts: "branch: picks a parser" is a branch, "picks the
+    branch: left or right" is not (data-contract 5.1).
+    """
+    match = ROLE_PREFIX.match(role)
+    return ROLE_KINDS[match.group(1).lower()] if match else None
+
+
 def parse_hop(raw, find_file):
-    """Parse one hop citation. Returns ({'i', 's', 'r'}, None) or (None, reason)."""
+    """Parse one hop citation. Returns ({'i', 's', 'r'[, 'k']}, None) or (None, reason).
+
+    `r` keeps the role verbatim, role prefix included; `k` is derived from that
+    prefix and omitted when there is none, so a registry without prefixes yields
+    exactly the dict this function returned before fan-out existed.
+    """
     text = norm_path(raw)
     match, index, reason = _resolve_citation(text, find_file)
     if match is None:
         return None, reason
     role = TAIL_TRIM.sub('', text[match.end():], count=1).strip()[:ROLE_MAX_LEN]
-    return {'i': index, 's': (match.group(2) or '').rstrip('()'), 'r': role}, None
+    hop = {'i': index, 's': (match.group(2) or '').rstrip('()'), 'r': role}
+    kind = role_kind(role)
+    if kind:
+        hop['k'] = kind
+    return hop, None
 
 
 def parse_entry_point(raw, find_file, default_label=''):

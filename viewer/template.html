@@ -95,7 +95,7 @@
   .ep.active{background:var(--accent-soft); color:var(--ink); box-shadow:inset 3px 0 0 var(--accent);}
   .ep .vw{color:var(--ink-3);}
   .star{display:block; width:100%; text-align:left; padding:6px 14px; font-size:.78rem;
-        border-bottom:1px solid var(--line); line-height:1.35;}
+        border-bottom:1px solid var(--line); line-height:1.35; word-break:break-all;}
   .star:hover{background:var(--panel-2);}
   .star .dot{display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px;
              box-shadow:inset 0 0 0 1px var(--ring);}
@@ -113,6 +113,7 @@
 
   /* ---------- map, packages scene: nodes per cluster + use-case and import overlays ---------- */
   .cluster{fill:var(--panel); stroke:var(--line); rx:10;}
+  /* monospace advance at this font-size is baked into CLABEL_CHARW (layout): keep them in step */
   .clabel{font-family:"IBM Plex Mono",monospace; font-size:11px; fill:var(--ink-3);}
   .node{stroke:var(--ring); stroke-width:1; rx:2.5; cursor:pointer;}
   .node.dimmed{opacity:var(--dim);}
@@ -132,7 +133,9 @@
   .ctxbox{fill:var(--panel); stroke:var(--line); rx:12; cursor:pointer;}
   .ctxbox.dimmed{opacity:.25;}
   .ctxstripe{rx:2;}
+  /* monospace advance at this font-size is baked into CTXLABEL_CHARW (layout): keep them in step */
   .ctxlabel{font-family:"IBM Plex Mono",monospace; font-size:12px; fill:var(--ink); pointer-events:none;}
+  /* monospace advance at this font-size is baked into CTXCOUNT_CHARW (layout): keep them in step */
   .ctxcount{font-family:"IBM Plex Mono",monospace; font-size:10px; fill:var(--ink-3); pointer-events:none;} /* also a tspan in the symbols scene */
   .aggedge{fill:none; stroke:var(--ink-3); opacity:.4;}
   .aggedge:hover{stroke:var(--accent); opacity:.9;}
@@ -207,7 +210,7 @@
 
 <div id="app">
   <aside id="sidebar">
-    <h2 class="sec closed" id="ephdr" hidden><span class="car">&#9662;</span><span data-t="panel.entry_points"></span> <span class="badge" id="epn"></span></h2>
+    <h2 class="sec" id="ephdr" hidden><span class="car">&#9662;</span><span data-t="panel.entry_points"></span> <span class="badge" id="epn"></span></h2>
     <div id="eplist" hidden></div>
     <h2 class="sec closed" id="starhdr"><span class="car">&#9662;</span><span data-t="panel.stars"></span> <span class="badge" id="starn"></span></h2>
     <div id="starlist" hidden></div>
@@ -299,6 +302,7 @@ const UI_STRINGS = {
     'ep.ucs': 'use-cases: {names}',
     'panel.stars': 'Stars',
     'star.stats': 'UC {uc}/{total} · imp {imp} · calls {calls}',
+    'stars.none': 'No file qualifies yet — a file appears here once a use-case, an import or a call points at it.',
     'panel.usecases': 'Use-cases',
     'badge.seam': 'seam',
     'uc.clear': 'clear selection (Esc)',
@@ -377,6 +381,7 @@ const UI_STRINGS = {
     'ep.ucs': 'use-cases: {names}',
     'panel.stars': 'Estrelas',
     'star.stats': 'UC {uc}/{total} · imp {imp} · cham {calls}',
+    'stars.none': 'Nenhum arquivo se qualifica ainda — um arquivo aparece aqui quando um use-case, um import ou uma chamada aponta para ele.',
     'panel.usecases': 'Use-cases',
     'badge.seam': 'seam',
     'uc.clear': 'limpar seleção (Esc)',
@@ -566,7 +571,69 @@ try{ hiddenCks = new Set(JSON.parse(localStorage.getItem(storeKey + ':hidef') ||
 function saveHidden(){ try{ localStorage.setItem(storeKey + ':hidef', JSON.stringify([...hiddenCks])); }catch(e){} }
 
 // ==================== layout and geometry ====================
+// --- pure layout geometry: no DOM, no globals (extracted by tests/test_e2e.py) ---
+// Scene layout is a pure function of the embedded data: it never reads the viewport,
+// the clock or a random source, and never measures rendered text (getComputedTextLength
+// would make the map depend on font loading). Same data in, same map out — the drag
+// offsets saved per commit in localStorage are deltas over these base positions.
 const NODE = 13, GAP = 5, PAD = 14, LABELH = 20;
+const CGAP = 26, CTX_CG = 60, CTX_RG = 80, TARGET_AR = 1.8;
+// per-character advances measured from the .clabel / .ctxlabel / .ctxcount CSS rules
+// above (11px / 12px / 10px IBM Plex Mono): changing a font-size there invalidates these.
+const CLABEL_CHARW = 6.7, CLABEL_MAXW = 210;
+const CTXLABEL_CHARW = 7.3, CTXLABEL_MAXW = 240, CTXCOUNT_CHARW = 6.1;
+// width of a string in monospace cells: East Asian wide code points take two
+function charCells(s){
+  let n = 0;
+  for (const ch of s){
+    const cp = ch.codePointAt(0);
+    n += (cp >= 0x1100 && (cp <= 0x115F || (cp >= 0x2E80 && cp <= 0xA4CF) || (cp >= 0xAC00 && cp <= 0xD7A3) ||
+          (cp >= 0xF900 && cp <= 0xFAFF) || (cp >= 0xFE30 && cp <= 0xFE6F) || (cp >= 0xFF00 && cp <= 0xFF60) ||
+          (cp >= 0xFFE0 && cp <= 0xFFE6) || cp >= 0x20000)) ? 2 : 1;
+  }
+  return n;
+}
+function textW(s, charw){ return charCells(s) * charw; }
+// clips to maxW with an ellipsis, using the same estimate the box width was sized with
+function clipText(s, maxW, charw){
+  const max = Math.floor(maxW / charw + 1e-6);
+  if (max < 1) return '';
+  if (charCells(s) <= max) return s;
+  let out = '', n = 0;
+  for (const ch of s){ const c = charCells(ch); if (n + c > max - 1) break; out += ch; n += c; }
+  return out + '…';
+}
+// shelf packing whose width comes from the total area and a target aspect ratio —
+// from the content, never from the canvas; assigns x/y in place
+function shelfPack(items, colGap, rowGap, targetAR){
+  let area = 0, widest = 0;
+  for (const it of items){ area += (it.w + colGap) * (it.h + rowGap); widest = Math.max(widest, it.w); }
+  const shelfW = Math.max(widest, Math.sqrt(area * targetAR));
+  let x = 0, y = 0, rowH = 0;
+  for (const it of items){
+    if (x > 0 && x + it.w > shelfW){ x = 0; y += rowH + rowGap; rowH = 0; }
+    it.x = x; it.y = y;
+    x += it.w + colGap; rowH = Math.max(rowH, it.h);
+  }
+  return items;
+}
+// entries: [[clusterKey, fileIndexes], ...] in file order; returns the packed clusters,
+// each with x/y/w/h/cols, the full `label` and the `shown` (possibly clipped) label
+function packClusters(entries){
+  const cls = entries.map(([key, idxs])=>{
+    const n = idxs.length;
+    const cols = Math.max(2, Math.ceil(Math.sqrt(n * 1.6)));
+    const label = key + ' · ' + n;
+    const gridW = cols * (NODE + GAP) - GAP + 2 * PAD;
+    const w = Math.max(gridW, Math.min(textW(label, CLABEL_CHARW), CLABEL_MAXW) + 2 * PAD);
+    return {key, idxs, cols, label, w,
+            h: Math.ceil(n / cols) * (NODE + GAP) - GAP + 2 * PAD + LABELH};
+  }).sort((a, b)=> b.idxs.length - a.idxs.length);
+  shelfPack(cls, CGAP, CGAP, TARGET_AR);
+  for (const c of cls) c.shown = clipText(c.label, c.w - 2 * PAD, CLABEL_CHARW);
+  return cls;
+}
+// --- end pure layout geometry ---
 
 // '(root)' is an identifier, not prose: it is also a localStorage key, so it is the
 // same string in every language.
@@ -600,20 +667,11 @@ function layoutPac(){
     const key = clusterKey(f.p);
     (groups.get(key) ?? groups.set(key,[]).get(key)).push(i);
   });
-  const cls = [...groups.entries()].map(([key,idxs])=>{
+  const entries = [...groups.entries()];
+  for (const [, idxs] of entries)
     idxs.sort((a,b)=> F[a].g === F[b].g ? (F[a].p < F[b].p ? -1:1) : (F[a].g < F[b].g ? -1:1));
-    const n = idxs.length;
-    const cols = Math.max(2, Math.ceil(Math.sqrt(n*1.6)));
-    return {key, idxs, cols,
-      w: cols*(NODE+GAP)-GAP+2*PAD,
-      h: Math.ceil(n/cols)*(NODE+GAP)-GAP+2*PAD+LABELH};
-  }).sort((a,b)=> b.idxs.length - a.idxs.length);
-  const MAXW = 1500, CGAP = 26;
-  let x=0,y=0,rowH=0;
+  const cls = packClusters(entries);
   for (const c of cls){
-    if (x > 0 && x + c.w > MAXW){ x = 0; y += rowH + CGAP; rowH = 0; }
-    c.x = x; c.y = y;
-    x += c.w + CGAP; rowH = Math.max(rowH, c.h);
     c.idxs.forEach((fi,j)=>{
       pos[fi] = { x: c.x+PAD + (j%c.cols)*(NODE+GAP),
                   y: c.y+PAD+LABELH + Math.floor(j/c.cols)*(NODE+GAP) };
@@ -671,7 +729,7 @@ function renderPac(){
   let s = '';
   for (const c of clusters){
     s += `<rect class="cluster" x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" rx="10"/>`;
-    s += `<text class="clabel" x="${c.x+PAD}" y="${c.y+15}">${esc(c.key)} · ${c.idxs.length}</text>`;
+    s += `<g><title>${esc(c.label)}</title><text class="clabel" x="${c.x+PAD}" y="${c.y+15}">${esc(c.shown)}</text></g>`;
   }
   // star halos: a layer BEFORE the nodes (so it never steals clicks); immune to the active-UC dim
   if (showStars){
@@ -694,13 +752,23 @@ function renderPac(){
 function paintState(){
   if (scene !== 'pac') return;
   const ucSet = new Set();
-  let seq = [];
+  let seq = [], rows = [];
   if (activeUC >= 0){
     for (const h of UCS[activeUC].hops) if (pos[h.i]) ucSet.add(h.i);
-    for (const h of UCS[activeUC].hops){
-      if (!pos[h.i]) continue;
-      if (!seq.length || seq[seq.length-1] !== h.i) seq.push(h.i);
+    // one row per level (data-contract 5.1), each holding the distinct files its
+    // hops point at. This overlay is file-level and dedups consecutive hops of the
+    // same file, so a fan whose siblings share the selector's file collapses here;
+    // the Flow scene, which is hop-level, still shows it.
+    for (const lv of groupHops(UCS[activeUC].hops)){
+      const row = [];
+      for (const h of lv.hops){
+        if (!pos[h.i] || row.includes(h.i)) continue;
+        if (rows.length && rows[rows.length-1].length === 1 && rows[rows.length-1][0] === h.i) continue;
+        row.push(h.i);
+      }
+      if (row.length) rows.push(row);
     }
+    for (const row of rows) for (const i of row) if (!seq.includes(i)) seq.push(i);
   }
   world.querySelectorAll('.node').forEach(el=>{
     const i = +el.dataset.i;
@@ -711,14 +779,23 @@ function paintState(){
   const ov = world.querySelector('#overlay');
   if (!ov) return;
   let s = '';
-  if (activeUC >= 0 && seq.length){
-    for (let j=0;j<seq.length-1;j++){
-      const a = nodeCenter(seq[j]), b = nodeCenter(seq[j+1]);
-      if (!a || !b) continue;
-      s += `<path class="flowline" marker-end="url(#arr)" d="${liftedCurve(a, b, 70, 0.22)}"/>`;
+  if (activeUC >= 0 && rows.length){
+    // edges: cartesian product between consecutive levels, as in the Flow scene
+    for (let j=0;j<rows.length-1;j++){
+      for (const ai of rows[j]) for (const bi of rows[j+1]){
+        const a = nodeCenter(ai), b = nodeCenter(bi);
+        if (!a || !b || ai === bi) continue;
+        s += `<path class="flowline" marker-end="url(#arr)" d="${liftedCurve(a, b, 70, 0.22)}"/>`;
+      }
     }
+    // badge per file: the level number, suffixed a/b/c when the level is a fan
     const order = new Map();
-    seq.forEach(i=>{ if(!order.has(i)) order.set(i, order.size+1); });
+    rows.forEach((row, j)=>{
+      row.forEach((i, k)=>{
+        if (order.has(i)) return;
+        order.set(i, (j+1) + (row.length > 1 ? String.fromCharCode(97+k) : '.'));
+      });
+    });
     for (const [i,n] of order){
       const c = nodeCenter(i);
       s += `<g class="fbadge"><circle cx="${c.x-7}" cy="${c.y-9}" r="9"/><text x="${c.x-7}" y="${c.y-9}">${n}</text></g>`;
@@ -737,14 +814,15 @@ function renderCtx(){
   const boxes = clusters.filter(c=>!hiddenCks.has(c.key)).map(c=>{
     const domCat = (()=>{ const cnt={}; c.idxs.forEach(i=>cnt[F[i].g]=(cnt[F[i].g]||0)+1);
       return Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0][0]; })();
-    return {key:c.key, n:c.idxs.length, domCat, idxs:c.idxs,
-            w: Math.max(96, c.key.length*7.5+30), h: 52};
+    const count = t('ctx.files', {n: c.idxs.length});
+    return {key:c.key, n:c.idxs.length, domCat, idxs:c.idxs, count,
+            w: Math.max(96, Math.min(textW(c.key, CTXLABEL_CHARW), CTXLABEL_MAXW) + 38,
+                        textW(count, CTXCOUNT_CHARW) + 20),
+            h: 52};
   });
-  const MAXW = 900, CG = 60, RG = 80;
-  let x=0,y=0,rowH=0;
+  shelfPack(boxes, CTX_CG, CTX_RG, TARGET_AR);
   for (const b of boxes){
-    if (x > 0 && x + b.w > MAXW){ x=0; y += rowH + RG; rowH = 0; }
-    b.x=x; b.y=y; x += b.w + CG; rowH = Math.max(rowH, b.h);
+    b.shown = clipText(b.key, b.w - 38, CTXLABEL_CHARW);
     const o = offs.ctx.get(b.key);
     if (o){ b.x += o.dx; b.y += o.dy; }
   }
@@ -782,11 +860,14 @@ function renderCtx(){
   }
   for (const b of boxes){
     const dim = lensOn && !focusClusters.has(b.key) ? ' dimmed' : '';
-    s += `<g data-ck="${esc(b.key)}" style="cursor:pointer">
+    // the native tooltip only earns its place when the label was actually clipped —
+    // otherwise it would just repeat the folder name already drawn in the box
+    const tip = b.shown === b.key ? '' : `<title>${esc(b.key)}</title>`;
+    s += `<g data-ck="${esc(b.key)}" style="cursor:pointer">${tip}
       <rect class="ctxbox${dim}" x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}"/>
       <rect class="ctxstripe${dim}" x="${b.x+10}" y="${b.y+8}" width="26" height="5" fill="${CATCOLOR(b.domCat)}"/>
-      <text class="ctxlabel" x="${b.x+10}" y="${b.y+30}">${esc(b.key)}</text>
-      <text class="ctxcount" x="${b.x+10}" y="${b.y+44}">${esc(t('ctx.files', {n:b.n}))}</text>
+      <text class="ctxlabel" x="${b.x+10}" y="${b.y+30}">${esc(b.shown)}</text>
+      <text class="ctxcount" x="${b.x+10}" y="${b.y+44}">${esc(b.count)}</text>
       <g data-hidectx="${esc(b.key)}"><title>${esc(t('ctx.hide'))}</title>
         <rect x="${b.x+b.w-18}" y="${b.y+2}" width="16" height="16" fill="transparent"/>
         <text class="ctxcount" x="${b.x+b.w-14}" y="${b.y+14}">×</text></g></g>`;
@@ -924,26 +1005,75 @@ function callTreeSvg(rootI, rootSym){
   })(root);
   return s;
 }
+// --- fan-out grouping (data-contract 5.1) ---
+// Groups hops into levels. A hop whose derived kind is 'branch' is a sibling: a
+// consecutive run of them is ONE level (a fan) whose members are alternatives
+// chosen at the preceding level. Anything else opens a level of its own. `n` is
+// 1-based and counts levels, not hops, so a registry with no role prefixes gets
+// one hop per level and the 1..N numbering the viewer has always shown.
+// Pure by contract: no DOM, no globals, no layout constants — tests/test_viewer_fanout.py
+// extracts this block between the sentinels and runs it under bare `node`.
+function groupHops(hops){
+  const levels = [];
+  for (const h of hops){
+    const isBranch = h && h.k === 'branch';
+    const last = levels.length ? levels[levels.length - 1] : null;
+    if (isBranch && last && last.fan){ last.hops.push(h); continue; }
+    levels.push({n: levels.length + 1, fan: !!isBranch, hops: [h]});
+  }
+  return levels;
+}
+// --- end fan-out grouping ---
+
+// The drawn label drops the role prefix that groupHops() already consumed; the
+// text itself stays verbatim in h.r (and in the detail panel). Cutting the token
+// before the first ':' keeps the prefix vocabulary in the pipeline alone.
+function hopRoleText(h){
+  return h.k ? h.r.replace(/^[^:]{1,12}:\s*/, '') : h.r;
+}
+// Level label: '3.' for a step, '3a' / '3b' / '3c' for the siblings of a fan.
+function hopLabel(level, k){
+  return level.fan ? level.n + String.fromCharCode(97 + k) : level.n + '.';
+}
 // precedence in the Flow scene: active use-case > active entry point > call tree root
 function renderFlow(){
   let s = '';
   if (activeUC >= 0){
-    // use-case flow: hops in a vertical column
+    // use-case flow: one row per level; the siblings of a fan share a row
     const u = UCS[activeUC];
-    const W = 470, X = 0;
-    let y = 0;
-    u.hops.forEach((h, idx)=>{
-      const f = F[h.i];
-      const label = baseName(f.p) + (h.s ? ' : ' + h.s : '');
-      const role = h.r.length > 66 ? h.r.slice(0, 65) + '…' : h.r;
-      s += `<g data-i="${h.i}" style="cursor:pointer">
-        <rect class="flownode" x="${X}" y="${y}" width="${W}" height="46" rx="9" style="stroke:${CATCOLOR(f.g)}"/>
-        <text class="flowt1" x="${X+12}" y="${y+19}">${idx+1}. ${esc(label)}</text>
-        <text class="flowt2" x="${X+12}" y="${y+36}">${esc(role)}</text></g>`;
-      if (idx < u.hops.length - 1)
-        s += `<path class="flowline" marker-end="url(#arr)" d="M${X+W/2},${y+46} L${X+W/2},${y+63}"/>`;
-      y += 64;
+    const levels = groupHops(u.hops);
+    const W = 470, GAP = 26, H = 46, ROW = 64;
+    // A fan of one still sits off the main line, so it never reads as a step.
+    const widthOf = lv => lv.fan ? Math.max(300, (W - GAP) / 2) : W;
+    const spanOf = lv => lv.hops.length * widthOf(lv) + (lv.hops.length - 1) * GAP;
+    const totalW = Math.max(...levels.map(spanOf));
+    const boxes = levels.map((lv, li) => {
+      const w = widthOf(lv), y = li * ROW;
+      // a fan is centered on the main line; a lone sibling is offset to its right
+      const span = spanOf(lv);
+      const x0 = lv.fan && lv.hops.length === 1 ? (totalW - W) / 2 + GAP + W / 2
+                                                : (totalW - span) / 2;
+      return lv.hops.map((h, k) => ({h, lv, k, w, y, x: x0 + k * (w + GAP)}));
     });
+    // edges: cartesian product between consecutive levels (1xN, Nx1, 1x1)
+    for (let li = 0; li < boxes.length - 1; li++){
+      for (const a of boxes[li]) for (const b of boxes[li + 1]){
+        // a seam hop is entered through a dashed edge; fan edges stay solid
+        const dash = b.h.k === 'seam' ? ' stroke-dasharray="6 4"' : '';
+        s += `<path class="flowline" marker-end="url(#arr)"${dash} d="M${a.x+a.w/2},${a.y+H} C${a.x+a.w/2},${a.y+H+9} ${b.x+b.w/2},${b.y-9} ${b.x+b.w/2},${b.y}"/>`;
+      }
+    }
+    for (const row of boxes) for (const b of row){
+      const h = b.h, f = F[h.i];
+      const label = baseName(f.p) + (h.s ? ' : ' + h.s : '');
+      const raw = hopRoleText(h);
+      const cap = Math.max(20, Math.round(b.w / 7.1));
+      const role = raw.length > cap ? raw.slice(0, cap - 1) + '…' : raw;
+      s += `<g data-i="${h.i}" style="cursor:pointer">
+        <rect class="flownode" x="${b.x}" y="${b.y}" width="${b.w}" height="${H}" rx="9" style="stroke:${CATCOLOR(f.g)}"/>
+        <text class="flowt1" x="${b.x+12}" y="${b.y+19}">${esc(hopLabel(b.lv, b.k))} ${esc(label)}</text>
+        <text class="flowt2" x="${b.x+12}" y="${b.y+36}">${esc(role)}</text></g>`;
+    }
     s = `<text class="classhdr" x="0" y="-18">${esc(u.name)}</text>` + s;
   } else if (activeEp >= 0){
     // entry point: call tree from the file where execution enters
@@ -1280,9 +1410,11 @@ const EP_UCS_MAX = 3;
 function epRoute(ep){ return ep.route && ep.route !== ep.label ? ep.route : null; }
 // the use-cases of an entry point, minus the one whose name is already its label
 function epUcs(ep){ return (ep.ucs || []).filter(n => n !== ep.label); }
-// grouped by kind; the whole section (header included) disappears when the map has none
+// grouped by kind; the whole section (header and list) disappears when the map has none,
+// and starts open when it has entries — entry points are the headline navigation
 if (ENTRY_POINTS.length){
   ephdr.hidden = false;
+  eplist.hidden = false;
   document.getElementById('epn').textContent = ENTRY_POINTS.length;
   let html = '';
   for (const kind of KINDS){
@@ -1320,16 +1452,33 @@ eplist.addEventListener('click', e=>{
 });
 
 // ==================== stars panel (most central files) ====================
-// top 20 by ucCount desc, ties by impIn desc; muted categories (tests) stay out of the ranking
+// A file qualifies only when something points at it: at least one use-case, one inbound
+// import or one inbound call. Order: ucCount desc, impIn desc, callIn desc; the sort is
+// stable, so files equal on all three keep file order (the ranking is deterministic).
+// Muted categories (tests) stay out of the ranking; at most STAR_MAX rows.
+const STAR_MAX = 20;
 const starRank = F.map((_,i)=>i)
   .filter(i=> !isMutedCat(F[i].g))
-  .sort((a,b)=> ucCount[b]-ucCount[a] || impIn[b]-impIn[a])
-  .slice(0, 20);
+  .filter(i=> ucCount[i] > 0 || impIn[i] > 0 || callIn[i] > 0)
+  .sort((a,b)=> ucCount[b]-ucCount[a] || impIn[b]-impIn[a] || callIn[b]-callIn[a])
+  .slice(0, STAR_MAX);
+// rows whose base name repeats in the list show their parent folder (and, if that still
+// repeats, the full path), so two "models.py" are told apart; the title keeps the path
+const starLabel = (function(){
+  const tail = (p, n) => p.split('/').slice(-n).join('/');
+  const count = n => { const m = new Map();
+    starRank.forEach(i=>{ const k = tail(F[i].p, n); m.set(k, (m.get(k) || 0) + 1); }); return m; };
+  const c1 = count(1), c2 = count(2);
+  return i => c1.get(tail(F[i].p, 1)) === 1 ? tail(F[i].p, 1)
+            : c2.get(tail(F[i].p, 2)) === 1 ? tail(F[i].p, 2) : F[i].p;
+})();
 document.getElementById('starn').textContent = starRank.length;
-document.getElementById('starlist').innerHTML = starRank.map(i=>
-  `<button class="star" data-star="${i}" title="${esc(F[i].p)}">
-    <span class="dot" style="background:${CATCOLOR(F[i].g)}"></span>${esc(baseName(F[i].p))}<br>
-    <span class="starnums">${esc(t('star.stats', {uc:ucCount[i], total:UCS.length, imp:impIn[i], calls:callIn[i]}))}</span></button>`).join('');
+document.getElementById('starlist').innerHTML = starRank.length
+  ? starRank.map(i=>
+      `<button class="star" data-star="${i}" title="${esc(F[i].p)}">
+        <span class="dot" style="background:${CATCOLOR(F[i].g)}"></span>${esc(starLabel(i))}<br>
+        <span class="starnums">${esc(t('star.stats', {uc:ucCount[i], total:UCS.length, imp:impIn[i], calls:callIn[i]}))}</span></button>`).join('')
+  : `<div class="empty">${esc(t('stars.none'))}</div>`;
 document.getElementById('starhdr').addEventListener('click', function(){
   this.classList.toggle('closed');
   const l = document.getElementById('starlist');

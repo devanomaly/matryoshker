@@ -1,0 +1,16 @@
+# Development-only dependencies. Neither the pipeline (pure Python standard library,
+# docs/data-contract.md principle 1) nor the viewer nor the pytest suite needs Playwright
+# — only tools/visual_review.py does.
+#
+#   pip install -r requirements-dev.txt
+#   python -m playwright install chromium     # one-off browser download
+#
+# CI installs pytest alone on the test matrix and this file on the visual-review job, so
+# the matrix legs stay fast.
+#
+# Playwright is pinned EXACTLY: each release requires its own browser build, and CI keys
+# the ~/.cache/ms-playwright cache on the hash of this file. A floating pin would let a
+# minor bump ask for a browser the cache key still calls unchanged, and CI would restore
+# a stale browser. Bump the pin and the cache is rebuilt, in one commit.
+pytest>=7.0
+playwright==1.62.0

@@ -74,7 +74,10 @@ O arquivo versionado é a única fonte de verdade coletiva.
 ### Viewer (`viewer/template.html`)
 
 - Arquivo único, **zero dependências externas** (CSP de artifact: nada de CDN; a única
-  exceção tolerada é Google Fonts). Nada de framework — SVG + DOM vanilla.
+  exceção tolerada é Google Fonts). Esse `<link>` é a única requisição de rede da página, e
+  o viewer tem de continuar funcionando por completo quando ela falha: mantenha um fallback
+  genérico (`sans-serif`, `monospace`, `system-ui`) no fim de todo `font-family`. Nada de
+  framework — SVG + DOM vanilla.
 - Temas: todo cor passa por tokens CSS definidos nos três blocos (`:root` claro,
   media-query dark guardada, `[data-theme="dark"]`). Cor definida só num bloco = bug.
 - Paleta categórica: as cores dos slots foram validadas (CVD + contraste) nos dois temas —
@@ -103,9 +106,13 @@ O arquivo versionado é a única fonte de verdade coletiva.
    para Símbolos, e Fluxo (que só aparece com UC ou endpoint ativo) — nos dois temas: o
    claro/escuro segue o ambiente, então alterne a preferência do sistema/navegador ou
    force `data-theme="dark"` / `data-theme="light"` no `<html>` pelo devtools;
-4. UC overlay: selecionar um UC, conferir badges/setas, e que Esc sobe um nível de cada
+4. se mexeu num painel da barra lateral, confira os dois estados dele: com dados (entry
+   points abertos por padrão, stars listando só arquivos para os quais algo aponta) e sem
+   (um build feito sem `--ucs`, em que a seção de entry points some e a lista de stars
+   mostra a mensagem de estado vazio);
+5. UC overlay: selecionar um UC, conferir badges/setas, e que Esc sobe um nível de cada
    vez até limpar a seleção;
-5. clicar num arquivo do overlay e conferir o bloco *Use-cases que passam aqui* (índice
+6. clicar num arquivo do overlay e conferir o bloco *Use-cases que passam aqui* (índice
    reverso) — ele é o que quebra quando o vínculo hop→arquivo muda.
 
 PRs pequenos e com um propósito. Descreva o que muda para o usuário do mapa, não só o
