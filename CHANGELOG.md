@@ -97,6 +97,17 @@ All notable changes to this project are documented in this file.
   deterministic text estimate, which also keeps localized file counts and long or East
   Asian folder names clear of the hide-folder `×`.
 
+- **The visual-review harness loads its own `config.py` and `probes.py` by path.**
+  Both names are generic, and `pipeline/config.py` already exists: whenever `pipeline/`
+  preceded `tools/` on `sys.path`, `from config import RUNS, STATES` resolved to the
+  wrong module, and the `try/except ImportError` beside it could not repair that — the
+  wrong module was already in `sys.modules`, so the retry raised the same error. Every
+  documented invocation put `tools/` first and was unaffected.
+- **`metrics.json` schema is now 2.** `by_status` gained an `unknown` bucket, so a
+  `metrics.json` written before that has a different key set; `visual_review.py diff`
+  now says "rows may not be comparable" instead of showing the added key as though the
+  fixture had moved.
+
 ### Notes
 
 - **Backward compatible.** The registry format is unchanged and the prefix stays verbatim
