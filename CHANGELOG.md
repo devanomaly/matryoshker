@@ -4,6 +4,22 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **Visual review harness** (`tools/visual_review.py`): one command builds the bundled
+  fixture with both bundled configs and drives the result in a real browser, writing a
+  PNG per named state (14 states across light/dark, `config/example.json` /
+  `config/example-ddd.json` and `en` / `pt-BR`) plus a machine-readable `metrics.json`
+  and a Markdown `report.md`. `visual_review.py diff` renders the before/after table of
+  what a change moved, which is what a pull request should quote. Playwright is a
+  development-only dependency, now declared in `requirements-dev.txt`; `pipeline/`, the
+  viewer and the pytest suite are unaffected.
+- **CI** (`.github/workflows/ci.yml`): a `visual review (ubuntu)` job builds both demo
+  maps from the committed golden extraction (no Node), writes the metrics table into the
+  run's job summary and uploads the HTML, screenshots and metrics as a workflow
+  artifact. It needs no permissions beyond the existing `contents: read`, writes only
+  under the runner's temp directory, and carries a 20-minute timeout.
+
 ### Fixed
 
 - **The generated HTML declares its character encoding.** `viewer/template.html` carried
