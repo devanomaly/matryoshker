@@ -7,6 +7,7 @@ CLIs against the golden extraction) lives in test_e2e.py.
 Reference: docs/data-contract.md, sections 3, 4, 5, 6, 8 and 9.
 """
 import json
+import os
 import sys
 
 import pytest
@@ -618,3 +619,86 @@ def test_inject_aborts_on_nfiles_mismatch(tmp_path, monkeypatch):
     with pytest.raises(SystemExit, match='does not match'):
         inject.main()
     assert not out_path.exists()
+
+
+# ---------------------------------------------------------------------------
+# Hop role prefixes -> derived hops[].k — data-contract sections 5.1 and 7.4
+# ---------------------------------------------------------------------------
+
+FIXTURE_UCS = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           'fixtures', 'branching-usecases.json')
+
+
+def _branching_finder():
+    """A file finder over the seven paths cited by the branching fixture.
+
+    Built from the fixture itself rather than from the golden extraction, which
+    contains no `ingest/` files at all.
+    """
+    raw = json.load(open(FIXTURE_UCS, encoding='utf-8'))
+    paths, seen = [], set()
+    for hop in raw[0]['hops']:
+        path = hop.split(':', 1)[0].strip()
+        if path not in seen:
+            seen.add(path)
+            paths.append(path)
+    path_index = {p: n for n, p in enumerate(paths)}
+    return raw, usecases.make_file_finder(path_index)
+
+
+def test_branching_fixture_cites_seven_distinct_files():
+    raw, _ = _branching_finder()
+    assert len(raw[0]['hops']) == 10
+    assert len({h.split(':', 1)[0] for h in raw[0]['hops']}) == 7
+
+
+def test_parse_hop_derives_k_for_every_fixture_hop():
+    raw, find_file = _branching_finder()
+    kinds = []
+    for line in raw[0]['hops']:
+        hop, reason = usecases.parse_hop(line, find_file)
+        assert hop is not None, reason
+        kinds.append(hop.get('k'))
+    assert kinds == [None, 'branch', 'branch', 'branch', None,
+                     'branch', 'branch', None, 'branch', 'branch']
+
+
+def test_parse_hop_omits_k_when_the_role_has_no_prefix():
+    find_file = usecases.make_file_finder({'a/b.py': 0})
+    hop, _ = usecases.parse_hop('a/b.py:f — plain role, no prefix', find_file)
+    assert 'k' not in hop
+
+
+@pytest.mark.parametrize('prefix,expected', [
+    ('branch:', 'branch'), ('Branch:', 'branch'), ('BRANCH:', 'branch'),
+    ('ramo:', 'branch'), ('Ramo:', 'branch'), ('RAMO:', 'branch'),
+    ('seam:', 'seam'), ('Seam:', 'seam'), ('SEAM:', 'seam'),
+    ('costura:', 'seam'), ('Costura:', 'seam'), ('COSTURA:', 'seam'),
+])
+def test_parse_hop_recognizes_both_languages_case_insensitively(prefix, expected):
+    find_file = usecases.make_file_finder({'a/b.py': 0})
+    hop, _ = usecases.parse_hop(f'a/b.py:f — {prefix} does something', find_file)
+    assert hop['k'] == expected
+
+
+def test_parse_hop_keeps_the_prefix_inside_r():
+    find_file = usecases.make_file_finder({'a/b.py': 0})
+    hop, _ = usecases.parse_hop('a/b.py:f — branch: layout A, best-effort', find_file)
+    assert hop['r'] == 'branch: layout A, best-effort'
+    assert hop['k'] == 'branch'
+
+
+def test_parse_hop_ignores_a_prefix_word_that_is_not_at_the_start():
+    find_file = usecases.make_file_finder({'a/b.py': 0})
+    hop, _ = usecases.parse_hop('a/b.py:f — picks the branch: left or right', find_file)
+    assert 'k' not in hop
+
+
+def test_build_ucs_carries_k_through_to_the_viewer_shape():
+    raw, find_file = _branching_finder()
+    files = [{'p': 'ingest/x.py', 'c': [], 'f': []}] * 7
+    ucs = prep_data.build_ucs(usecases.load_usecases(FIXTURE_UCS), files, find_file,
+                              {'hops': 0, 'dropped': 0, 'use_cases': 0})
+    assert [h.get('k') for h in ucs[0]['hops']] == [
+        None, 'branch', 'branch', 'branch', None, 'branch', 'branch', None,
+        'branch', 'branch']

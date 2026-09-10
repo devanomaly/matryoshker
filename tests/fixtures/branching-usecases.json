@@ -1,0 +1,23 @@
+[
+  {
+    "name": "Ingest a document and produce validated notes",
+    "actor": "operator",
+    "goal": "turn a scanned document into validated notes, one per segment",
+    "status": "inferred",
+    "entry_points": [],
+    "hops": [
+      "ingest/pipeline.py:process_segments — drops seen keys and dispatches by kind via PARSERS",
+      "ingest/parsers/kind_a.py:parse_kind_a — branch: layout A, key sliced from the barcode, items best-effort",
+      "ingest/parsers/kind_b.py:parse_kind_b — branch: layout B v1/v2 and its sub-layout",
+      "ingest/parsers/kind_c.py:parse_kind_c — branch: layout C, no own key, roles by label",
+      "ingest/validation.py:normalize_decimal — money token becomes Decimal; unparseable raises",
+      "ingest/models.py:Note._normalize_counterparty — branch: normalizes at the model boundary without rejecting",
+      "ingest/parsers/__init__.py:IncompleteParse — branch: fail-loud names the missing fields; alternative to model construction, caught in process_segments",
+      "ingest/validation.py:validate_note — arbitrates valid / valid-with-warnings / rejected by kind",
+      "ingest/validation.py:_validate_kind_a — branch: kind A; item sum below total rejects, above only warns",
+      "ingest/validation.py:_validate_kind_b — branch: kind B requires the long key and the embedded id"
+    ],
+    "rules": [],
+    "seam_crossing": false
+  }
+]
