@@ -13,6 +13,15 @@ All notable changes to this project are documented in this file.
   use-cases that enter there. The entry-points panel shows both, and the entry-point
   detail links to each use-case. `meta.contract` stays `2` (see
   `docs/data-contract.md` section 15.1).
+- **The generated HTML declares its character encoding.** `viewer/template.html` carried
+  no `<meta charset>`, while a generated map carries hundreds of non-ASCII bytes — the
+  middle-dot separator, em dashes, ellipses, arrows and every accented character of the
+  pt-BR `UI_STRINGS` table. A browser therefore had to guess the encoding. Served over
+  HTTP without a `charset` in the `Content-Type` — which `QUICKSTART.md` documents as a
+  supported way to publish a map — Chromium falls back to windows-1252 and the whole UI
+  renders as mojibake (`pan Â· drag`); opened from `file://` the guess is usually right
+  but not reliably so. The declaration is now the first line of the template, inside the
+  1024-byte window a browser prescans.
 
 ## [1.4.0] - 2026-09-05
 
