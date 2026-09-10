@@ -6,6 +6,32 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
+- **Visual review harness** (`tools/visual_review.py`): one command builds the bundled
+  fixture with both bundled configs and drives the result in a real browser, writing a
+  PNG per named state (14 states across light/dark, `config/example.json` /
+  `config/example-ddd.json` and `en` / `pt-BR`) plus a machine-readable `metrics.json`
+  and a Markdown `report.md`. `visual_review.py diff` renders the before/after table of
+  what a change moved, which is what a pull request should quote. Playwright is a
+  development-only dependency, now declared in `requirements-dev.txt`; `pipeline/`, the
+  viewer and the pytest suite are unaffected.
+- **CI** (`.github/workflows/ci.yml`): a `visual review (ubuntu)` job builds both demo
+  maps from the committed golden extraction (no Node), writes the metrics table into the
+  run's job summary and uploads the HTML, screenshots and metrics as a workflow
+  artifact. It needs no permissions beyond the existing `contents: read`, writes only
+  under the runner's temp directory, and carries a 20-minute timeout.
+
+### Fixed
+
+- **The generated HTML declares its character encoding.** `viewer/template.html` carried
+  no `<meta charset>`, while a generated map carries hundreds of non-ASCII bytes — the
+  middle-dot separator, em dashes, ellipses, arrows and every accented character of the
+  pt-BR `UI_STRINGS` table. A browser therefore had to guess the encoding. Served over
+  HTTP without a `charset` in the `Content-Type` — which `QUICKSTART.md` documents as a
+  supported way to publish a map — Chromium falls back to windows-1252 and the whole UI
+  renders as mojibake (`pan Â· drag`); opened from `file://` the guess is usually right
+  but not reliably so. The declaration is now the first line of the template, inside the
+  1024-byte window a browser prescans.
+
 - **Hop fan-out in the Flow scene** (#9). A hop whose role opens with `branch:` / `ramo:`
   is a *sibling* — one of N alternatives chosen at the preceding hop — not a step after
   it. A consecutive run of them now occupies one level, drawn side by side between its

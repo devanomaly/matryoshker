@@ -104,6 +104,50 @@ def test_build_data_extra_and_html_for_each_config(
     assert '__MATRYOSHKER_DATA__' not in html
 
 
+# The HTML spec only scans the first 1024 bytes for an encoding declaration, and a
+# document without one is decoded by guessing: over HTTP with no charset in the
+# Content-Type, Chromium falls back to windows-1252 and the map renders mojibake.
+CHARSET_PRESCAN_BYTES = 1024
+CHARSET_META = re.compile(rb'<meta[^>]+charset\s*=\s*["\']?utf-8', re.I)
+
+
+def test_template_declares_utf8_in_the_prescan_window(viewer_template):
+    """The viewer template must declare UTF-8 early enough for a browser to see it.
+
+    The viewer's own text carries non-ASCII characters (the middle-dot separator,
+    em dashes, ellipses, arrows, and every accented character of the pt-BR
+    UI_STRINGS table), so a missing declaration is not cosmetic.
+    """
+    with open(viewer_template, 'rb') as fh:
+        head = fh.read(CHARSET_PRESCAN_BYTES)
+    assert CHARSET_META.search(head), (
+        'viewer/template.html must declare <meta charset="utf-8"> within the first '
+        f'{CHARSET_PRESCAN_BYTES} bytes; without it a browser guesses the encoding '
+        'and non-ASCII UI text renders as mojibake')
+
+
+def test_injected_html_keeps_the_charset_declaration(
+        tmp_path, repo_root, golden_dir, config_dir, example_usecases, viewer_template):
+    """inject.py must not push the declaration out of the browser's prescan window."""
+    data_path = tmp_path / 'data.json'
+    out_path = tmp_path / 'matryoshker.html'
+
+    assert run_pipeline_script(repo_root, 'prep_data.py', [
+        '--es', os.path.join(golden_dir, 'es-output.json'),
+        '--imports', os.path.join(golden_dir, 'im-output.json'),
+        '--config', os.path.join(config_dir, 'example.json'),
+        '--ucs', example_usecases, '--out', str(data_path)]).returncode == 0
+    assert run_pipeline_script(repo_root, 'inject.py', [
+        '--template', viewer_template, '--data', str(data_path),
+        '--out', str(out_path)]).returncode == 0
+
+    head = out_path.read_bytes()[:CHARSET_PRESCAN_BYTES]
+    assert CHARSET_META.search(head), (
+        'the generated HTML lost its charset declaration, or it was pushed past the '
+        f'first {CHARSET_PRESCAN_BYTES} bytes')
+    assert 'Â·' not in out_path.read_text(encoding='utf-8')
+
+
 def test_last_script_of_injected_html_is_valid_javascript(
         tmp_path, repo_root, golden_dir, config_dir, example_usecases, viewer_template):
     """The template's second <script> (the viewer app) must still be syntactically
