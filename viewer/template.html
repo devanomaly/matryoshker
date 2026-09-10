@@ -298,6 +298,8 @@ const UI_STRINGS = {
     'kind.cli': 'CLI',
     'kind.cron': 'Scheduled',
     'kind.other': 'Other',
+    'ep.route': 'route {route}',
+    'ep.ucs': 'use-cases: {names}',
     'panel.stars': 'Stars',
     'star.stats': 'UC {uc}/{total} · imp {imp} · calls {calls}',
     'stars.none': 'No file qualifies yet — a file appears here once a use-case, an import or a call points at it.',
@@ -375,6 +377,8 @@ const UI_STRINGS = {
     'kind.cli': 'CLI',
     'kind.cron': 'Agendados',
     'kind.other': 'Outros',
+    'ep.route': 'rota {route}',
+    'ep.ucs': 'use-cases: {names}',
     'panel.stars': 'Estrelas',
     'star.stats': 'UC {uc}/{total} · imp {imp} · cham {calls}',
     'stars.none': 'Nenhum arquivo se qualifica ainda — um arquivo aparece aqui quando um use-case, um import ou uma chamada aponta para ele.',
@@ -1282,13 +1286,19 @@ function symDetail(){
     ins.map(e=>`<li class="sym"><a class="symlink" data-selsym="${esc(e[0])}">${esc(e[0])}</a> <span class="muted">:${e[2]}</span></li>`).join('') + `</ul>`;
 }
 function entryDetail(j){
-  const ep = ENTRY_POINTS[j], f = F[ep.i];
+  const ep = ENTRY_POINTS[j], f = F[ep.i], names = ep.ucs || [];
   dtitle.textContent = t('detail.entry_point');
   dbody.innerHTML = `<strong>${esc(ep.label)}</strong>
     <div class="muted">${esc(t('kind.' + ep.kind))}</div>` +
+    (epRoute(ep) ? `<div class="muted">${esc(t('ep.route', {route: epRoute(ep)}))}</div>` : '') +
     (ep.symbol ? `<div class="sym">${esc(ep.symbol)}</div>` : '') +
     `<div class="path">${esc(f.p)}</div>
-    <div class="sym">${fileLink(ep.i)}</div>`;
+    <div class="sym">${fileLink(ep.i)}</div>` +
+    (names.length ? `<h3>${esc(t('panel.usecases'))}</h3><ul>` + names.map(n=>{
+      const k = UCS.findIndex(u => u.name === n);
+      return `<li style="font-size:.75rem">` +
+        (k >= 0 ? `<a class="filelink" data-setuc="${k}">${esc(n)}</a>` : esc(n)) + `</li>`;
+    }).join('') + `</ul>` : '');
 }
 dbody.addEventListener('change', e=>{
   const sel = e.target.closest('[data-stsel]');
@@ -1394,6 +1404,12 @@ function exportStatus(){
 document.querySelector('#sidebar [data-exportst]').addEventListener('click', exportStatus);
 
 // ==================== entry points panel ====================
+// how many declaring use-cases one panel entry shows before "+N" (the detail shows all)
+const EP_UCS_MAX = 3;
+// the parser route of an entry point, only when it says more than the label already does
+function epRoute(ep){ return ep.route && ep.route !== ep.label ? ep.route : null; }
+// the use-cases of an entry point, minus the one whose name is already its label
+function epUcs(ep){ return (ep.ucs || []).filter(n => n !== ep.label); }
 // grouped by kind; the whole section (header and list) disappears when the map has none,
 // and starts open when it has entries — entry points are the headline navigation
 if (ENTRY_POINTS.length){
@@ -1405,10 +1421,16 @@ if (ENTRY_POINTS.length){
     const group = ENTRY_POINTS.map((ep,j)=>({ep, j})).filter(o=>o.ep.kind === kind);
     if (!group.length) continue;
     html += `<div class="kindhdr">${esc(t('kind.' + kind))} · ${group.length}</div>`;
-    html += group.map(o=>
-      `<button class="ep" data-ep="${o.j}">${esc(o.ep.label)}<br><span class="vw">` +
-      esc((o.ep.symbol ? o.ep.symbol + ' · ' : '') + baseName(F[o.ep.i].p)) +
-      `</span></button>`).join('');
+    html += group.map(o=>{
+      const names = epUcs(o.ep), shown = names.slice(0, EP_UCS_MAX);
+      const ucs = shown.join(' · ') +
+        (names.length > shown.length ? ' +' + (names.length - shown.length) : '');
+      return `<button class="ep" data-ep="${o.j}">${esc(o.ep.label)}<br><span class="vw">` +
+        esc((o.ep.symbol ? o.ep.symbol + ' · ' : '') + baseName(F[o.ep.i].p)) + `</span>` +
+        (epRoute(o.ep) ? `<br><span class="vw">${esc(t('ep.route', {route: epRoute(o.ep)}))}</span>` : '') +
+        (names.length ? `<br><span class="vw">${esc(t('ep.ucs', {names: ucs}))}</span>` : '') +
+        `</button>`;
+    }).join('');
   }
   eplist.innerHTML = html;
 }

@@ -29,7 +29,8 @@ More:
 
 - use-case overlay on the map (dim + numbered badges + arrows in hop order);
 - an entry points panel in the sidebar (HTTP routes, commands, events, CLI, scheduled
-  jobs) and a `entry point: … ×` crumb to clear the lens;
+  jobs) and a `entry point: … ×` crumb to clear the lens; each entry showing the parsed
+  route it belongs to (when there is one) and the use-cases that enter there;
 - a reverse index **file → use-cases**: clicking a file lists the UCs that pass through
   it (linked by file, not by route) and jumps back to each one;
 - a status dropdown in the UC panel (local draft, see below);

@@ -123,7 +123,9 @@ Each script prints one summary line on stdout when it succeeds:
   **resolved** hops only.
 - `prep_extra.py`: `entry_points=N calls: internal=N cross=N -> <out> (NKB)`, plus (when
   entry points exist) a breakdown line `entry points: <a> from parsers, <b> declared,
-  <c> fallback, <d> duplicates merged`.
+  <c> fallback, <d> duplicates merged`. Entry points found by a parser and entry points
+  declared by a use-case on the same file and symbol are merged into one: the written
+  label wins, the parsed route is kept beside it.
 - `inject.py`: `<out>: NKB`.
 
 A `hops=` count lower than what the registry declares means some hop's **file** did not

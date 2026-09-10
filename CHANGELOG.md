@@ -22,6 +22,13 @@ All notable changes to this project are documented in this file.
 
 ### Fixed
 
+- **A route parser no longer erases a hand-written entry-point label.** Entry points that
+  land on the same file and symbol are now merged instead of collapsed onto the first
+  source: the label declared by a use-case wins over the one a parser generated, the
+  parser's route is kept in the new `route` field, and the new `ucs` field lists the
+  use-cases that enter there. The entry-points panel shows both, and the entry-point
+  detail links to each use-case. `meta.contract` stays `2` (see
+  `docs/data-contract.md` section 15.1).
 - **Stars panel**: a file now needs at least one use-case, one inbound import or one inbound
   call to be listed; the list is no longer padded to 20 with all-zero files, and the badge
   counts what is shown. Rows whose base name repeats show their parent folder. When nothing

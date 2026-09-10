@@ -106,6 +106,28 @@ def test_build_data_extra_and_html_for_each_config(
     assert '__MATRYOSHKER_DATA__' not in html
 
 
+def test_declared_entry_point_label_survives_a_route_parser(
+        tmp_path, repo_root, golden_dir, config_dir, example_usecases, config_name):
+    """A label a use-case author wrote must be the same with and without a parser."""
+    extra_path = tmp_path / 'extra.json'
+    result = run_pipeline_script(repo_root, 'prep_extra.py', [
+        '--es', os.path.join(golden_dir, 'es-output.json'),
+        '--imports', os.path.join(golden_dir, 'im-output.json'),
+        '--config', os.path.join(config_dir, config_name),
+        '--ucs', example_usecases,
+        '--repo', os.path.join(repo_root, 'examples', 'sample-drf'),
+        '--out', str(extra_path)])
+    assert result.returncode == 0, result.stderr
+
+    entry_points = json.loads(extra_path.read_text(encoding='utf-8'))['entry_points']
+    borrow = [e for e in entry_points if e['symbol'] == 'BookViewSet']
+    assert len(borrow) == 1, entry_points
+    assert borrow[0]['label'] == 'POST /api/books/{id}/borrow'
+    assert borrow[0]['ucs'] == ['Member borrows a copy of a title']
+    # the parser adds the route it observed instead of replacing the written label
+    assert borrow[0]['route'] == ('/api/books' if config_name == 'example.json' else None)
+    # and its generic label is not left over as an entry point of its own
+    assert [e for e in entry_points if e['label'] == '/api/books'] == []
 # The HTML spec only scans the first 1024 bytes for an encoding declaration, and a
 # document without one is decoded by guessing: over HTTP with no charset in the
 # Content-Type, Chromium falls back to windows-1252 and the map renders mojibake.

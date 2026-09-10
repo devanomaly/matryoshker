@@ -60,6 +60,13 @@ command, a scheduled job); leave it empty and the **first resolved hop** becomes
 fallback entry point automatically (`docs/data-contract.md`, section 6.2) — this is the
 normal path for a DDD-first registry with no routes yet.
 
+When a route parser also maps the same file and symbol, your label is the one shown: the
+parser's route is kept beside it (the `route` field, shown under the entry in the panel)
+and both are merged into one entry point, together with the name of every use-case that
+declared it (`docs/data-contract.md`, section 6.2). Declaring an entry point on a method
+(`views.py:BookViewSet.list`) of a class the parser registered gives a second,
+method-level entry that shares the class's route.
+
 #### What `prep_data.py` checks — and what it does not
 
 - It resolves the hop's **file** against the graph. A hop whose file does not resolve is
