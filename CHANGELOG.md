@@ -29,6 +29,15 @@ Cluster base positions changed, so a saved arrangement (`mtk:<repo>@<commit>:pos
 per commit) will appear moved on an existing map. Node dragging, the per-use-case
 Packages arrangement, the hidden-folder list and the status drafts are unaffected and
 their `localStorage` keys are unchanged.
+- **The generated HTML declares its character encoding.** `viewer/template.html` carried
+  no `<meta charset>`, while a generated map carries hundreds of non-ASCII bytes — the
+  middle-dot separator, em dashes, ellipses, arrows and every accented character of the
+  pt-BR `UI_STRINGS` table. A browser therefore had to guess the encoding. Served over
+  HTTP without a `charset` in the `Content-Type` — which `QUICKSTART.md` documents as a
+  supported way to publish a map — Chromium falls back to windows-1252 and the whole UI
+  renders as mojibake (`pan Â· drag`); opened from `file://` the guess is usually right
+  but not reliably so. The declaration is now the first line of the template, inside the
+  1024-byte window a browser prescans.
 
 ## [1.4.0] - 2026-09-05
 
