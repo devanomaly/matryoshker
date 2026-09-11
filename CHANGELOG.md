@@ -4,6 +4,21 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+- **Added — onboarding docs.** The README now opens with the question the tool answers,
+  links the live demo (`https://devanomaly.github.io/matryoshker/`) with a screenshot of
+  a selected use-case, and walks through the viewer in five steps using the controls'
+  real names. `docs/first-use-case.md` adds one use-case to the bundled fixture end to
+  end — the files read, the entry, why each hop belongs, the status choice, the build
+  counters, what a wrong symbol and a wrong file print, what a reviewer checks, and what
+  to revisit when the code changes. `CONTRIBUTING.md` gains *What the status labels
+  establish* (what the pipeline does and does not check about `human-verified`,
+  reviewer identity, freshness, the header's commit) and *Keeping a registry current*;
+  `QUICKSTART.md` states which output paths the user controls and how to start with no
+  registry. `docs/pt-BR/README.md` and `docs/pt-BR/first-use-case.md` are the current
+  Portuguese onboarding path; the v1.3 Portuguese snapshot moved, unchanged, to
+  `docs/pt-BR/v1.3/`. The prior-art paragraph moved below the adoption path and no
+  longer claims that no other tool offers the combination.
+
 - **Fixed — the Flow scene now follows the selection you made last.** With a use-case
   active, choosing an entry point (or *call tree from here* in the Symbols scene) updated
   the crumb, the detail panel and the sidebar highlight while Flow kept drawing the
