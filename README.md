@@ -149,20 +149,20 @@ is complete, or keep it fresh on its own.
 
 ## What is extracted, what you supply
 
-| Comes from the extraction (automatic) | Comes from you or an agent (curated) |
+| Automatic (extracted, or derived by the viewer from the embedded data) | Comes from you or an agent (curated) |
 |---|---|
 | files, line counts, packages (first two path segments) | category names and the path rules that assign them (`config/`) |
 | import edges between files | use-case name, actor, goal, status |
 | classes, methods, functions with line ranges | the hops: which symbols, in what order, one role each |
 | call edges, resolved by name heuristics (same file, then imports) | business rules, tests, failure paths (documentation-only fields) |
 | HTTP routes, when a route parser is configured (Django/DRF today) | declared entry points (a command, an event, a scheduled job, a route the parser missed) |
-| the *Stars* ranking, the reverse index file → use-cases, the call trees | the header's `commit` and `date` |
+| the *Stars* ranking, the reverse index file → use-cases, the call trees (derived in the viewer; the first two also read the registry) | the header's `commit` and `date` |
 
 ## What the viewer offers
 
 | Scene | C4 level | What it shows |
 |---|---|---|
-| **Context** | C1 | packages as boxes + aggregated import edges (thickness = import count); the entry-point lens dims what a depth-2 BFS does not reach |
+| **Context** | C1 | packages as boxes + aggregated import edges (thickness = import count); the entry-point lens dims what a depth-2 BFS over imports does not reach |
 | **Packages** | C2 | every file in package clusters, colored by category; clusters are packed into a compact grid whose size comes from the data, not from the window |
 | **Symbols** | C3–C4 | double-click a file: classes/functions as pills + internal and cross-file calls as edges |
 | **Flow** | — | only appears with a use-case or entry point active, and draws whichever of them you selected last: UC → numbered vertical chain of hops, fanned out where the registry marks siblings with `branch:`; entry point (or a call tree launched from Symbols) → top-down call tree |

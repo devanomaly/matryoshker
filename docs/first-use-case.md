@@ -179,7 +179,8 @@ python pipeline/build.py --repo examples/sample-drf --config config/example.json
     --ucs examples/sample-drf/usecases.json --out matryoshker.html --lang python --strict
 ```
 
-Expected output (stderr and stdout interleaved; the `build.py: step k/4` lines omitted):
+Expected output (stderr and stdout interleaved; the `build.py: step k/4` lines omitted;
+on Windows the paths print with backslashes):
 
 ```
 files=25 imports=33 ucs=6 hops=37 -> out/data.json (10KB)
@@ -200,8 +201,8 @@ Both variants below were run. **A wrong symbol** — hop 1 cited as
 
 ```
 UC Member renews a loan before it is due: 4/4 hops resolved
-  unverified symbol [LoanService.extend not declared in lending/services/loan_service.py]: lending/services/loan_service.py:LoanService.extend — refuses when the title has a queue
-files=25 imports=33 ucs=6 hops=37 -> ...
+  unverified symbol [LoanService.extend not declared in lending/services/loan_service.py]: lending/services/loan_service.py:LoanService.extend — refuses when the title has a queue or the renewals are used up
+files=25 imports=33 ucs=6 hops=37 -> out/data.json (10KB)
 ```
 
 The hop still counts (`4/4`, `hops=37`), still draws on the map with the wrong name,
@@ -212,7 +213,7 @@ Read the stderr.
 
 ```
 UC Member renews a loan before it is due: 3/4 hops resolved
-  dropped [file not found in the extraction]: lending/domain/renewal_policy.py:can_renew — the rule
+  dropped [file not found in the extraction]: lending/domain/renewal_policy.py:can_renew — the rule: no open reservation and fewer than MAX_RENEWALS
 total: 36/37 hops resolved (1 dropped in 1 use-cases)
 strict: 1 citations dropped
 ```
@@ -230,7 +231,8 @@ Open `matryoshker.html`.
   is due*, `LoanService.renew · loan_service.py` — the fallback.
 - Click the use-case. *Packages*: three badges — `1.` on `loan_service.py`, `2.` on
   `policies.py`, `3.` on `models.py` — because the two `policies.py` hops share a file.
-  The right panel lists the four hops with their roles and the two rules.
+  The right panel lists the four hops with their roles and the two rules, numbered by
+  map badge — so the two `policies.py` hops both read `2`.
 - *Flow*: four boxes, `1.` to `4.`, in registry order.
 - Click the `loan_service.py` square: *Use-cases passing here (4)* — three existing
   use-cases and yours. This is the file → use-cases reverse index.

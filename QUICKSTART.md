@@ -31,7 +31,7 @@ python pipeline/build.py --repo examples/sample-drf --config config/example.json
 ```
 
 Expected, on a fresh checkout (the `build.py: step k/4` lines and the extractor's own
-summary omitted):
+summary omitted; on Windows the paths print with backslashes):
 
 ```
 files=25 imports=33 ucs=5 hops=33 -> out/data.json (9KB)

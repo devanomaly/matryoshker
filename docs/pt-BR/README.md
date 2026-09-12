@@ -171,14 +171,14 @@ e, aplicada a uma entrada, na seção 9 de [first-use-case.md](first-use-case.md
 
 ## O que é extraído, o que você fornece
 
-| Vem da extração (automático) | Vem de você ou de um agente (curado) |
+| Automático (extraído, ou derivado pelo viewer dos dados embutidos) | Vem de você ou de um agente (curado) |
 |---|---|
 | arquivos, contagem de linhas, pacotes (dois primeiros segmentos do caminho) | nomes de categoria e as regras de caminho que as atribuem (`config/`) |
 | arestas de import entre arquivos | nome, ator, objetivo e status do use-case |
 | classes, métodos, funções com faixas de linha | os hops: quais símbolos, em que ordem, um papel cada |
 | arestas de chamada, resolvidas por heurística de nomes (mesmo arquivo, depois imports) | regras de negócio, testes, caminhos de falha (campos só de documentação) |
 | rotas HTTP, quando há parser de rotas configurado (só Django/DRF hoje) | pontos de entrada declarados (um comando, um evento, um job agendado, uma rota que o parser não pegou) |
-| o ranking *Stars*, o índice reverso arquivo → use-cases, as árvores de chamadas | o `commit` e a `date` do cabeçalho |
+| o ranking *Stars*, o índice reverso arquivo → use-cases, as árvores de chamadas (derivados no viewer; os dois primeiros também leem o registro) | o `commit` e a `date` do cabeçalho |
 
 ## Limites conhecidos
 
