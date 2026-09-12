@@ -9,6 +9,10 @@ feed in new use-cases and bless the existing ones.
 
 ### Adding a use-case
 
+First time? [`docs/first-use-case.md`](docs/first-use-case.md) does this once, end to
+end, on the bundled fixture — including how to choose the hops and the status. The
+reference below is the grammar.
+
 Edit `data/<repo>/usecases.json` (`examples/sample-drf/usecases.json` for the bundled
 fixture) and add an entry:
 
@@ -107,6 +111,62 @@ In the viewer, the status dropdown in the use-case panel is a local draft
 `{"<use-case name>": "<status>"}` snippet of your local changes to apply to the registry
 via a PR. The versioned registry file is the only collective source of truth.
 
+### What the status labels establish
+
+The rule above is a house rule kept by review. This is what the current pipeline and
+viewer actually do, so nobody reads more into a chip than it carries:
+
+- **The registry can say `human-verified` directly.** `pipeline/usecases.py` accepts
+  any of the five values (or a v1 alias) from the file and copies it into the map. No
+  check asks who set it. The bundled fixture ships one `human-verified` entry that way.
+- **Endorsement is not authenticated.** The viewer's dropdown offers `human-verified`
+  to anyone as a local draft; the export snippet is plain JSON. Whether a human really
+  re-read the hops is established by the pull request that applies the snippet, and by
+  nothing else.
+- **No reviewer identity, date or evidence is stored.** The registry schema has no such
+  field and the viewer renders only the value. Extra keys on an entry (`reviewed_by`,
+  `reviewed_on`, `evidence`, anything) are kept in the file and ignored by the pipeline
+  (data contract §4.1), so a team may adopt its own; git history of the registry file
+  records who changed a status and when.
+- **A changed implementation does not change a status.** Every build copies `status`
+  as written. The mechanical signals are on stderr: a hop whose *file* no longer
+  resolves is **dropped** (`dropped [file not found in the extraction]: …`, and
+  `--strict` exits 3), a hop whose *symbol* is no longer declared in its file is
+  **warned** (`unverified symbol [...]: …`) but still counted, still drawn, and never
+  fails `--strict`. A renamed method under a `human-verified` entry is therefore a
+  warning you must read, not an error.
+- **The header's commit and date are config values** (`commit`, `date` in
+  `config/<repo>.json`), typed by hand. Nothing reads git. The live demo shows
+  `0000000` because that is what `config/example.json` says.
+- **Viewer status drafts live in one browser**, under the `localStorage` key
+  `mtk:<repo>@<commit>:st`; they never reach the file and they stop applying when the
+  config's `commit` changes. They become a versioned change only when someone pastes
+  the exported snippet into the registry and merges it.
+
+### Keeping a registry current
+
+There is no automatic freshness check yet (the CI gate is `docs/ROADMAP.md` item 2).
+The routine that works with what exists today:
+
+1. **Same PR.** A change to a file that a use-case cites touches the registry in the
+   same pull request — a fixed citation, a new hop, a status set to `outdated`. The
+   reverse index in the viewer (*Use-cases passing here* on the file) and
+   `grep -n "<path>" data/<repo>/usecases.json` both tell you which entries to look at.
+2. **Rebuild with `--strict` and read stderr.** Dropped citations stop the build; every
+   `unverified symbol` line is a citation to fix before the map is trusted.
+3. **Re-read against the extraction.** Select the use-case, open the Symbols scene of
+   each hop's file, compare the hop list with *Calls* / *Called by*. Role text that the
+   code no longer supports is a human find; nothing warns about it.
+4. **Set the status by the rule.** Re-read and correct: keep it. Corrected by you
+   without a second reader: `inferred`. Contradicted by the code and not yet rewritten:
+   `outdated`, never deleted. A second reader who re-read the hops may bless
+   `human-verified` in the PR.
+5. **Bump `commit` and `date`** in `config/<repo>.json` before publishing a map, so the
+   header says which revision it describes.
+
+[`docs/first-use-case.md`](docs/first-use-case.md) shows the routine on one entry,
+including what each kind of mistake prints.
+
 ### Adding a new repo
 
 `config/<repo>.json` (copy `config/example.json` or `config/example-ddd.json`) +
@@ -142,8 +202,10 @@ via a PR. The versioned registry file is the only collective source of truth.
 ### Pipeline (`pipeline/*.py`)
 
 - Pure Python standard library, 3.10+, no third-party runtime dependency ever. CLIs use
-  `argparse`. Scripts never write into the target repo — everything goes under `--out`
-  or `--extract-out`.
+  `argparse`. Scripts write only to the paths the user names (`--out`,
+  `--extract-out`, whose default `out/` is relative to the current directory) — never
+  to a path of their own choosing inside the target repo. A user who points those
+  flags inside the target repo gets files there; that is their call, not the script's.
 - Every script keeps the
   `try: from _common import ... except ImportError: from pipeline._common import ...`
   pattern so both `python pipeline/x.py` and `python -m pipeline.x` work.
@@ -270,3 +332,13 @@ can download and open.
 
 Small, single-purpose PRs. Describe what changes for the map's user, not only what
 changes in the code.
+
+### Documentation in two languages
+
+The English files at the root and under `docs/` are canonical. The current Portuguese
+onboarding path is `docs/pt-BR/README.md` and `docs/pt-BR/first-use-case.md`; a PR that
+changes what those two cover in English (the purpose, the demo tour, the sample build,
+the first-use-case walkthrough, the status boundaries) updates them in the same change,
+keeping every command and every promise identical. `docs/pt-BR/v1.3/` is the frozen
+v1.3 snapshot and is not updated. The technical reference (`docs/data-contract.md`, the
+ADRs, the rest of this file) is English-only.

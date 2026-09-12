@@ -154,5 +154,35 @@
     "seam_crossing": false,
     "status": "agent-verified",
     "notes": "No test covers this read path in the fixture; the empty tests list is the honest answer rather than a guess."
+  },
+  {
+    "name": "Desk clerk starts a loan and gets one of three outcomes",
+    "actor": "Desk clerk",
+    "goal": "Know, at the desk, whether the loan opened or which rule refused it",
+    "entry_points": [
+      "http: catalog/views.py:BookViewSet.borrow — POST /api/books/{id}/borrow"
+    ],
+    "hops": [
+      "catalog/views.py:BookViewSet.borrow — hands the free copy and the member id to lending",
+      "lending/services/loan_service.py:LoanService.checkout — seam: crosses from catalog into lending; the one place that decides",
+      "lending/services/loan_service.py:MemberSuspended — branch: the card is suspended; nothing is written",
+      "lending/services/loan_service.py:LoanLimitReached — branch: the member is at the tier loan limit; nothing is written",
+      "lending/models.py:Loan — branch: allowed; the copy is marked lent and the loan is opened"
+    ],
+    "async_legs": [],
+    "failure_paths": [
+      "suspended card -> lending/services/loan_service.py:MemberSuspended (hop 3a)",
+      "tier limit reached -> lending/services/loan_service.py:LoanLimitReached (hop 3b)"
+    ],
+    "rules": [
+      "LP-01 max-three-open-loans (basic tier; scholar and staff get more)",
+      "LP-04 suspended-card-cannot-borrow"
+    ],
+    "tests": [
+      "tests/test_lending_flows.py::LoanServiceTests"
+    ],
+    "seam_crossing": true,
+    "status": "inferred",
+    "notes": "The same request as 'Member borrows a copy of a title', told from the desk and ending at the fork: checkout chooses one of three outcomes, so the three are branch: siblings of one level (3a, 3b, 3c). The two refusals terminate; with no hop after the fan the Flow draws no reconvergence. The siblings that live in the selector's own file appear in the Flow scene, not on the map overlay (data contract 5.1)."
   }
 ]
