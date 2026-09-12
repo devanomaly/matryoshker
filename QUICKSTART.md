@@ -34,10 +34,10 @@ Expected, on a fresh checkout (the `build.py: step k/4` lines and the extractor'
 summary omitted; on Windows the paths print with backslashes):
 
 ```
-files=25 imports=33 ucs=5 hops=33 -> out/data.json (9KB)
-entry points: 4 from parsers, 5 declared, 1 fallback, 2 duplicates merged
-entry_points=8 calls: internal=49 cross=71 -> out/extra.json (6KB)
-matryoshker.html: 97KB
+files=25 imports=33 ucs=6 hops=38 -> out/data.json (10KB)
+entry points: 4 from parsers, 6 declared, 1 fallback, 2 duplicates merged
+entry_points=9 calls: internal=49 cross=71 -> out/extra.json (6KB)
+matryoshker.html: 98KB
 ```
 
 Open `matryoshker.html` in a browser (double-click it, or serve the directory

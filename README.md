@@ -26,7 +26,7 @@ themselves — lives in `config/` and `data/`, never in the viewer.
 
 **[devanomaly.github.io/matryoshker](https://devanomaly.github.io/matryoshker/)** — the
 bundled `examples/sample-drf` fixture (a small Django/DRF library-lending app) with its
-five use-cases, rebuilt by `.github/workflows/pages.yml` on every push to `main`.
+six use-cases, rebuilt by `.github/workflows/pages.yml` on every push to `main`.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/demo-use-case-dark.png">
@@ -55,6 +55,9 @@ Every control below exists in the demo under exactly this name.
 2. **Read its Flow.** Click *Flow* in the breadcrumb. The same use-case is now a vertical
    chain, one box per hop: file, symbol, role. This is the curated explanation, drawn
    hop by hop. Two hops in the same file get one badge on the map but two boxes here.
+   Now pick *Desk clerk starts a loan and gets one of three outcomes*: its hops are
+   marked `branch:` in the registry, so Flow draws them as a fan — `3a`, `3b`, `3c` side
+   by side under the hop that chooses — and the `seam:` hop is entered by a dashed edge.
 3. **Zoom out, zoom in.** *Context* shows packages as boxes with aggregated import
    edges. Back in *Packages*, click a file square (say `loan_service.py` under
    `lending/services`) — the right panel shows its classes, imports and, under
@@ -83,6 +86,16 @@ Every control below exists in the demo under exactly this name.
 Esc goes up one level at a time; the hint line at the bottom of the map lists the
 mouse gestures.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/demo-flow-fan-dark.png">
+  <img src="docs/images/demo-flow-fan-light.png" width="1920"
+       alt="The Flow scene of the demo for the use-case 'Desk clerk starts a loan and gets one of three outcomes'. Box 1 is BookViewSet.borrow in views.py, box 2 is LoanService.checkout in loan_service.py, and below it three boxes side by side, 3a MemberSuspended, 3b LoanLimitReached and 3c Loan in models.py, each joined to box 2 by an arrow. The right panel lists the five hops with their branch: and seam: role prefixes and the two rules involved.">
+</picture>
+
+*The Flow scene for a use-case whose registry entry marks three hops `branch:`: one
+level, three siblings, chosen at hop 2. Nothing follows the fan, so nothing reconverges.
+Same build as above, viewport 1920×720.*
+
 ## Build it yourself
 
 Prerequisites: Python 3.10+, Node 22+, git.
@@ -96,7 +109,7 @@ python pipeline/build.py \
 ```
 
 Open `matryoshker.html` in a browser. The build prints one counter line per step; the
-one to read is `files=25 imports=33 ucs=5 hops=33` — `hops` counts the hops that resolved
+one to read is `files=25 imports=33 ucs=6 hops=38` — `hops` counts the hops that resolved
 against the extraction, and any hop that did not is reported on stderr right above it.
 On Windows `python` may resolve to an older interpreter; `py -3` is the safe spelling.
 

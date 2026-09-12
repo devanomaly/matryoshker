@@ -33,7 +33,7 @@ rota, os próprios use-cases — vive em `config/` e `data/`, nunca no viewer.
 
 **[devanomaly.github.io/matryoshker](https://devanomaly.github.io/matryoshker/)** — o
 fixture `examples/sample-drf` (uma pequena app Django/DRF de empréstimo de livros) com
-seus cinco use-cases, reconstruído por `.github/workflows/pages.yml` a cada push em
+seus seis use-cases, reconstruído por `.github/workflows/pages.yml` a cada push em
 `main`. A interface da demo está em inglês (`"lang": "en"` em `config/example.json`); com
 `"lang": "pt-BR"` no config o mesmo build sai com a interface em português, e este tour
 cita os dois nomes quando eles diferem.
@@ -67,7 +67,10 @@ parênteses quando o texto muda).
 2. **Leia o Fluxo.** Clique em *Flow* (*Fluxo*) na migalha. O mesmo use-case agora é uma
    cadeia vertical, uma caixa por hop: arquivo, símbolo, papel. É a explicação curada,
    desenhada hop a hop. Dois hops no mesmo arquivo ganham um badge só no mapa, mas duas
-   caixas aqui.
+   caixas aqui. Agora escolha *Desk clerk starts a loan and gets one of three outcomes*:
+   seus hops estão marcados `branch:` no registro, então o Fluxo os desenha em leque —
+   `3a`, `3b`, `3c` lado a lado sob o hop que escolhe — e o hop `seam:` recebe uma aresta
+   tracejada.
 3. **Afaste, aproxime.** *Context* (*Contexto*) mostra os pacotes como caixas com arestas
    de import agregadas. De volta em *Packages*, clique num quadrado de arquivo (por
    exemplo `loan_service.py` em `lending/services`) — o painel direito mostra as classes,
@@ -100,6 +103,16 @@ parênteses quando o texto muda).
 Esc sobe um nível de cada vez; a linha de dica no rodapé do mapa lista os gestos do
 mouse.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../images/demo-flow-fan-dark.png">
+  <img src="../images/demo-flow-fan-light.png" width="1920"
+       alt="A cena Flow da demo para o use-case 'Desk clerk starts a loan and gets one of three outcomes'. A caixa 1 é BookViewSet.borrow em views.py, a caixa 2 é LoanService.checkout em loan_service.py, e abaixo dela três caixas lado a lado, 3a MemberSuspended, 3b LoanLimitReached e 3c Loan em models.py, cada uma ligada à caixa 2 por uma seta. O painel direito lista os cinco hops com seus prefixos de papel branch: e seam: e as duas regras envolvidas.">
+</picture>
+
+*A cena Flow de um use-case cuja entrada no registro marca três hops como `branch:`: um
+nível, três irmãos, escolhidos no hop 2. Nada vem depois do leque, então nada reconverge.
+Mesmo build de cima, viewport de 1920×720.*
+
 ## Construa você mesmo
 
 Pré-requisitos: Python 3.10+, Node 22+, git.
@@ -113,7 +126,7 @@ python pipeline/build.py \
 ```
 
 Abra `matryoshker.html` no navegador. O build imprime uma linha de contadores por etapa; a
-que importa é `files=25 imports=33 ucs=5 hops=33` — `hops` conta os hops que resolveram
+que importa é `files=25 imports=33 ucs=6 hops=38` — `hops` conta os hops que resolveram
 contra a extração, e qualquer hop que não resolveu é reportado em stderr logo acima. No
 Windows, `python` pode resolver para um interpretador antigo; `py -3` é a grafia segura.
 

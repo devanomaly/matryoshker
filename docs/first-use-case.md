@@ -29,7 +29,7 @@ waiting for the title.
 
 Why this one: it is a real behavior with a business rule of its own (renewals are capped
 and blocked by a queue), it is small, and the fixture's registry does not have it yet.
-The five entries already in `examples/sample-drf/usecases.json` are the ones you see in
+The six entries already in `examples/sample-drf/usecases.json` are the ones you see in
 the demo.
 
 Practice: start from a behavior a stakeholder would name, not from a module. "Renew a
@@ -183,13 +183,13 @@ Expected output (stderr and stdout interleaved; the `build.py: step k/4` lines o
 on Windows the paths print with backslashes):
 
 ```
-files=25 imports=33 ucs=6 hops=37 -> out/data.json (10KB)
-entry points: 4 from parsers, 5 declared, 2 fallback, 2 duplicates merged
-entry_points=9 calls: internal=49 cross=71 -> out/extra.json (6KB)
-matryoshker.html: 98KB
+files=25 imports=33 ucs=7 hops=42 -> out/data.json (11KB)
+entry points: 4 from parsers, 6 declared, 2 fallback, 2 duplicates merged
+entry_points=10 calls: internal=49 cross=71 -> out/extra.json (6KB)
+matryoshker.html: 99KB
 ```
 
-Read the counters against what you wrote: `ucs=6` (five plus yours), `hops=37` (33
+Read the counters against what you wrote: `ucs=7` (six plus yours), `hops=42` (38
 plus your four), `2 fallback` (the fixture already had one use-case with no entry point;
 yours is the second). No line starting with `UC ` appeared on stderr: every hop's file
 resolved and every symbol was found in its file.
@@ -202,10 +202,10 @@ Both variants below were run. **A wrong symbol** — hop 1 cited as
 ```
 UC Member renews a loan before it is due: 4/4 hops resolved
   unverified symbol [LoanService.extend not declared in lending/services/loan_service.py]: lending/services/loan_service.py:LoanService.extend — refuses when the title has a queue or the renewals are used up
-files=25 imports=33 ucs=6 hops=37 -> out/data.json (10KB)
+files=25 imports=33 ucs=7 hops=42 -> out/data.json (11KB)
 ```
 
-The hop still counts (`4/4`, `hops=37`), still draws on the map with the wrong name,
+The hop still counts (`4/4`, `hops=42`), still draws on the map with the wrong name,
 and the exit code is **0 even with `--strict`**. The only trace is that stderr line.
 Read the stderr.
 
@@ -214,11 +214,11 @@ Read the stderr.
 ```
 UC Member renews a loan before it is due: 3/4 hops resolved
   dropped [file not found in the extraction]: lending/domain/renewal_policy.py:can_renew — the rule: no open reservation and fewer than MAX_RENEWALS
-total: 36/37 hops resolved (1 dropped in 1 use-cases)
+total: 41/42 hops resolved (1 dropped in 1 use-cases)
 strict: 1 citations dropped
 ```
 
-The hop is dropped (`hops=36`), and with `--strict` the build stops at step 2 with exit
+The hop is dropped (`hops=41`), and with `--strict` the build stops at step 2 with exit
 code 3 and writes no HTML. Without `--strict` it exits 0 and builds a map with three
 hops. Contract: §5.4, §5.5 and §11 of the data contract.
 
@@ -226,7 +226,7 @@ hops. Contract: §5.4, §5.5 and §11 of the data contract.
 
 Open `matryoshker.html`.
 
-- Sidebar, *Use-cases*: six entries; yours is last, with an `inferred` chip.
+- Sidebar, *Use-cases*: seven entries; yours is last, with an `inferred` chip.
 - Sidebar, *Entry points*, group *Other*: an entry named *Member renews a loan before it
   is due*, `LoanService.renew · loan_service.py` — the fallback.
 - Click the use-case. *Packages*: three badges — `1.` on `loan_service.py`, `2.` on
@@ -234,7 +234,7 @@ Open `matryoshker.html`.
   The right panel lists the four hops with their roles and the two rules, numbered by
   map badge — so the two `policies.py` hops both read `2`.
 - *Flow*: four boxes, `1.` to `4.`, in registry order.
-- Click the `loan_service.py` square: *Use-cases passing here (4)* — three existing
+- Click the `loan_service.py` square: *Use-cases passing here (5)* — four existing
   use-cases and yours. This is the file → use-cases reverse index.
 - *open symbol map ⌄*, then click `renew`: *Calls (2)* `can_renew`, `loan_period_days`;
   *Called by (0)*.

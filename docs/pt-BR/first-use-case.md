@@ -34,7 +34,7 @@ empréstimo quando ninguém está esperando pelo título.
 
 Por que este: é um comportamento real com uma regra de negócio própria (renovações têm
 teto e são bloqueadas por fila), é pequeno, e o registro do fixture ainda não o tem. As
-cinco entradas que já estão em `examples/sample-drf/usecases.json` são as que você vê na
+seis entradas que já estão em `examples/sample-drf/usecases.json` são as que você vê na
 demo.
 
 Prática: parta de um comportamento que um stakeholder nomearia, não de um módulo.
@@ -188,14 +188,14 @@ Saída esperada (stderr e stdout intercalados; as linhas `build.py: step k/4` om
 no Windows os caminhos saem com barras invertidas):
 
 ```
-files=25 imports=33 ucs=6 hops=37 -> out/data.json (10KB)
-entry points: 4 from parsers, 5 declared, 2 fallback, 2 duplicates merged
-entry_points=9 calls: internal=49 cross=71 -> out/extra.json (6KB)
-matryoshker.html: 98KB
+files=25 imports=33 ucs=7 hops=42 -> out/data.json (11KB)
+entry points: 4 from parsers, 6 declared, 2 fallback, 2 duplicates merged
+entry_points=10 calls: internal=49 cross=71 -> out/extra.json (6KB)
+matryoshker.html: 99KB
 ```
 
-Leia os contadores contra o que você escreveu: `ucs=6` (cinco mais o seu), `hops=37`
-(33 mais os seus quatro), `2 fallback` (o fixture já tinha um use-case sem ponto de
+Leia os contadores contra o que você escreveu: `ucs=7` (seis mais o seu), `hops=42`
+(38 mais os seus quatro), `2 fallback` (o fixture já tinha um use-case sem ponto de
 entrada; o seu é o segundo). Nenhuma linha começando com `UC ` apareceu em stderr: o
 arquivo de todo hop resolveu e todo símbolo foi encontrado no seu arquivo.
 
@@ -207,10 +207,10 @@ As duas variantes abaixo foram executadas. **Um símbolo errado** — hop 1 cita
 ```
 UC Member renews a loan before it is due: 4/4 hops resolved
   unverified symbol [LoanService.extend not declared in lending/services/loan_service.py]: lending/services/loan_service.py:LoanService.extend — refuses when the title has a queue or the renewals are used up
-files=25 imports=33 ucs=6 hops=37 -> out/data.json (10KB)
+files=25 imports=33 ucs=7 hops=42 -> out/data.json (11KB)
 ```
 
-O hop ainda conta (`4/4`, `hops=37`), ainda é desenhado no mapa com o nome errado, e o
+O hop ainda conta (`4/4`, `hops=42`), ainda é desenhado no mapa com o nome errado, e o
 código de saída é **0 mesmo com `--strict`**. O único rastro é aquela linha de stderr.
 Leia o stderr.
 
@@ -219,11 +219,11 @@ Leia o stderr.
 ```
 UC Member renews a loan before it is due: 3/4 hops resolved
   dropped [file not found in the extraction]: lending/domain/renewal_policy.py:can_renew — the rule: no open reservation and fewer than MAX_RENEWALS
-total: 36/37 hops resolved (1 dropped in 1 use-cases)
+total: 41/42 hops resolved (1 dropped in 1 use-cases)
 strict: 1 citations dropped
 ```
 
-O hop é descartado (`hops=36`) e, com `--strict`, o build para na etapa 2 com código de
+O hop é descartado (`hops=41`) e, com `--strict`, o build para na etapa 2 com código de
 saída 3 e não escreve HTML. Sem `--strict` ele sai com 0 e constrói um mapa com três
 hops. Contrato: §5.4, §5.5 e §11.
 
@@ -231,7 +231,7 @@ hops. Contrato: §5.4, §5.5 e §11.
 
 Abra `matryoshker.html`.
 
-- Barra lateral, *Use-cases*: seis entradas; a sua é a última, com chip `inferred`.
+- Barra lateral, *Use-cases*: sete entradas; a sua é a última, com chip `inferred`.
 - Barra lateral, *Entry points*, grupo *Other*: uma entrada chamada *Member renews a loan
   before it is due*, `LoanService.renew · loan_service.py` — o fallback.
 - Clique no use-case. *Packages*: três badges — `1.` em `loan_service.py`, `2.` em
@@ -239,7 +239,7 @@ Abra `matryoshker.html`.
   arquivo. O painel direito lista os quatro hops com seus papéis e as duas regras,
   numerados pelo badge do mapa — por isso os dois hops de `policies.py` mostram `2`.
 - *Flow*: quatro caixas, de `1.` a `4.`, na ordem do registro.
-- Clique no quadrado de `loan_service.py`: *Use-cases passing here (4)* — três use-cases
+- Clique no quadrado de `loan_service.py`: *Use-cases passing here (5)* — quatro use-cases
   existentes e o seu. Este é o índice reverso arquivo → use-cases.
 - *open symbol map ⌄*, depois clique em `renew`: *Calls (2)* `can_renew`,
   `loan_period_days`; *Called by (0)*.
