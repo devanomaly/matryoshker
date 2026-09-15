@@ -4,6 +4,23 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+- **Added — call-stack frames for a use-case.** A registry entry may now carry `frames`
+  beside its `hops`: the same flow, told as the call stack it really is, each frame
+  naming the frame that called it and how (`entry`, `call`, `queue`, `on_commit`,
+  `worker`, `inbound`, `other`). The pipeline resolves a frame citation exactly like a
+  hop, derives its depth from the parent chain, caps its status at the use-case's, and
+  checks every edge against the extractor's import graph in five states — `entry`,
+  `same_file`, `import`, `unprovable` (a queue or a commit hook is not something an
+  import graph can speak about) and `fail`, which is only ever a plain call the graph
+  does not back. It also enforces the invariant that every hop is a frame, and
+  `--strict` now fails on a hop no frame cites or on a frame that had to be dropped.
+  In the viewer, such a use-case still opens as levels; a toggle beside the title swaps
+  to the stack view, which draws one indented row per frame with its edge, the
+  registry's own words and the edge check, and starts a new stack under a rule when a
+  worker picks the flow up. `frames` is optional in every sense: a registry without it
+  produces exactly the `data.json` bytes it did before. See `docs/data-contract.md`
+  sections 4.4, 7.4 and 13.5, and `tests/fixtures/stack-frames/` for a worked example.
+
 - **Added — onboarding docs.** The README now opens with the question the tool answers,
   links the live demo (`https://devanomaly.github.io/matryoshker/`) with a screenshot of
   a selected use-case, and walks through the viewer in five steps using the controls'
