@@ -1,0 +1,114 @@
+[
+  {
+    "name": "Customer checks a basket out",
+    "actor": "Customer",
+    "goal": "Pay for a basket and get a receipt once the order is on its way",
+    "entry_points": [
+      "http: POST /orders/{order_id}/checkout (orders/api/views.py:CheckoutView)"
+    ],
+    "hops": [
+      "orders/api/views.py:CheckoutView — audits the request and delegates",
+      "orders/services/checkout.py:CheckoutService.place — validates, charges and schedules",
+      "orders/gateway/payments.py:PaymentGateway.charge — charges the basket total",
+      "orders/tasks/notify.py:send_receipt — the worker sends the receipt",
+      "orders/models/order.py:Order.mark_shipped — moves the order to shipped"
+    ],
+    "frames": [
+      {
+        "id": "S1",
+        "parent": null,
+        "edge": "entry",
+        "hop": "orders/api/views.py:CheckoutView",
+        "role": "post — audits the request and delegates",
+        "registry": "hop 1"
+      },
+      {
+        "id": "S2",
+        "parent": "S1",
+        "edge": "call",
+        "hop": "orders/common/mixins.py:AuditMixin",
+        "role": "record_audit — writes one audit line; inherited by CheckoutView",
+        "registry": "frame only"
+      },
+      {
+        "id": "S3",
+        "parent": "S1",
+        "edge": "call",
+        "hop": "orders/services/checkout.py:CheckoutService.place",
+        "role": "the central rule of the flow",
+        "registry": "hop 2"
+      },
+      {
+        "id": "S4",
+        "parent": "S3",
+        "edge": "call",
+        "hop": "orders/services/checkout.py:validate_items",
+        "role": "rejects an empty basket and a non-positive quantity",
+        "registry": "frame only",
+        "status": "verificado-agente",
+        "status_reason": "read and replayed by an agent, so it cannot outrank the use-case"
+      },
+      {
+        "id": "S5",
+        "parent": "S3",
+        "edge": "other",
+        "edge_note": "into the payment provider's library, which no extraction of this repo contains",
+        "hop": "orders/gateway/payments.py:PaymentGateway.charge",
+        "role": "charges the basket total",
+        "registry": "hop 3",
+        "status_reason": "mock: run against the fixture's no-op gateway"
+      },
+      {
+        "id": "S6",
+        "parent": "S3",
+        "edge": "queue",
+        "hop": "orders/common/queue.py:enqueue",
+        "role": "publishes the receipt job by dotted name",
+        "registry": "frame only"
+      },
+      {
+        "id": "S7",
+        "parent": "S6",
+        "edge": "worker",
+        "hop": "orders/tasks/notify.py:send_receipt",
+        "role": "another process picks the job up and runs it",
+        "registry": "hop 4"
+      },
+      {
+        "id": "S8",
+        "parent": "S7",
+        "edge": "call",
+        "hop": "orders/models/order.py:Order.mark_shipped",
+        "role": "moves the order to shipped",
+        "registry": "hop 5",
+        "status": "outdated",
+        "status_reason": "the job imports Order inside the function body, so no import edge backs this call"
+      }
+    ],
+    "async_legs": ["the receipt job runs in the worker process"],
+    "failure_paths": ["empty basket -> ValueError before anything is charged"],
+    "rules": ["an order needs at least one item"],
+    "tests": [],
+    "seam_crossing": true,
+    "status": "inferred"
+  },
+  {
+    "name": "Operator replays the pending jobs",
+    "actor": "Operator",
+    "goal": "Drain the queue by hand after the worker was down",
+    "entry_points": [
+      "command: orders/tasks/worker.py:run_pending — replay"
+    ],
+    "hops": [
+      "orders/tasks/worker.py:run_pending — pops every pending job",
+      "orders/common/queue.py:drain — empties the queue, oldest first",
+      "orders/tasks/notify.py:send_receipt — runs the job the queue named"
+    ],
+    "async_legs": [],
+    "failure_paths": [],
+    "rules": [],
+    "tests": [],
+    "seam_crossing": false,
+    "status": "inferred"
+  }
+]

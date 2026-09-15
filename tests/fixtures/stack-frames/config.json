@@ -1,0 +1,27 @@
+{
+  "$schema": "../../../schemas/config.schema.json",
+  "repo": "stack-frames",
+  "commit": "0000000",
+  "date": "2026-09-15",
+  "lang": "en",
+  "categories": [
+    { "id": "views", "label": "Views & routes" },
+    { "id": "services", "label": "Services" },
+    { "id": "gateway", "label": "Gateways" },
+    { "id": "models", "label": "Models" },
+    { "id": "tasks", "label": "Background jobs", "gray": true },
+    { "id": "other", "label": "Other", "gray": true },
+    { "id": "tests", "label": "Tests", "gray": true, "muted": true }
+  ],
+  "rules": [
+    ["orders/api/", "views"],
+    ["orders/services/", "services"],
+    ["orders/gateway/", "gateway"],
+    ["orders/models/", "models"],
+    ["orders/tasks/", "tasks"]
+  ],
+  "fallback_category": "other",
+  "test_path_marker": "tests/",
+  "test_category": "tests",
+  "hop_path_prefixes": []
+}
