@@ -25,6 +25,58 @@
       "default": [],
       "items": { "type": "string" }
     },
+    "frame": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "hop"],
+      "description": "One frame of the call stack behind the hops (data-contract.md 4.4). Frames are regenerated from the code, never hand-maintained.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique within the use-case; how other frames name this one."
+        },
+        "parent": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "The id of the frame that called this one; null (or absent) opens a stack."
+        },
+        "edge": {
+          "type": "string",
+          "default": "call",
+          "enum": ["entry", "call", "queue", "on_commit", "worker", "inbound", "other"],
+          "description": "How execution reached this frame from its parent. worker and inbound reopen the stack at depth 0; other requires edge_note. An unknown value is coerced to other with a warning."
+        },
+        "edge_note": {
+          "type": "string",
+          "default": "",
+          "description": "What the boundary is. Required in practice when edge is \"other\"."
+        },
+        "hop": {
+          "$ref": "#/definitions/citation",
+          "description": "Citation of this frame, same grammar as a hop (data-contract.md 5.1). An inherited method cites the class that declares it, with the method name in role. No line numbers."
+        },
+        "role": {
+          "type": "string",
+          "default": "",
+          "description": "What the frame does; truncated at 140 characters."
+        },
+        "registry": {
+          "type": "string",
+          "default": "",
+          "description": "Free text tying the frame back to the flat registry (\"hop 3\", \"frame only\", ...). Printed verbatim, never parsed."
+        },
+        "status": {
+          "$ref": "#/definitions/status",
+          "description": "Epistemic status of this frame. Defaults to the use-case's and is capped by it: a frame never outranks the use-case it belongs to."
+        },
+        "status_reason": {
+          "type": "string",
+          "default": "",
+          "description": "Why the frame has that status. The prefix \"mock:\" means it was executed with mocked data; it adds no status value."
+        }
+      }
+    },
     "useCase": {
       "type": "object",
       "additionalProperties": true,
@@ -72,6 +124,11 @@
           "default": [],
           "description": "Hop citations in execution order (data-contract.md 5.1). A hop whose file does not resolve is dropped and reported on stderr.",
           "items": { "$ref": "#/definitions/citation" }
+        },
+        "frames": {
+          "type": "array",
+          "description": "Optional call stack behind the hops (data-contract.md 4.4 and 7.4). Every hop must be cited by a frame; not every frame is a hop. Omit the key entirely and nothing about the build changes.",
+          "items": { "$ref": "#/definitions/frame" }
         },
         "rules": {
           "$ref": "#/definitions/stringList",

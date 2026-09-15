@@ -279,19 +279,23 @@ def resolve_use_case(uc, find_file, report=None):
     return result
 
 
-def report_citations(name, kind, resolved, total, dropped, notes=()):
+def report_citations(name, kind, resolved, total, dropped, notes=(), extra=()):
     """Print the per-use-case stderr block of data-contract 5.5, when there is one.
 
-    `kind` is the plural noun used in the header ('hops', 'entry points'); `notes`
-    are (raw citation, explanation) pairs for citations that resolved but look wrong.
+    `kind` is the plural noun used in the header ('hops', 'entry points', 'frames');
+    `notes` are (raw citation, explanation) pairs for citations that resolved but look
+    wrong. `extra` carries (label, explanation, raw) triples for the line kinds a
+    caller adds to the block, printed in the same indented `label [why]: raw` shape.
     """
-    if not dropped and not notes:
+    if not dropped and not notes and not extra:
         return
     warn(f'UC {name}: {resolved}/{total} {kind} resolved')
     for raw, reason in dropped:
         warn(f'  dropped [{reason}]: {raw}')
     for raw, note in notes:
         warn(f'  unverified symbol [{note}]: {raw}')
+    for label, why, raw in extra:
+        warn(f'  {label} [{why}]: {raw}')
 
 
 def report_total(kind, resolved, dropped, use_cases):

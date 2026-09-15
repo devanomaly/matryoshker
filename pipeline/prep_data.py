@@ -14,7 +14,10 @@ Output: the JSON {meta, files, imports, ucs} the viewer reads.
 Use-case hops that do not resolve (unreadable citation, or a file outside the
 extraction) are dropped, and every drop is reported on stderr with its reason plus a
 per-use-case summary. A hop whose symbol is not declared in the file it points at is
-kept but reported too. The exit code stays 0 unless --strict is given.
+kept but reported too. A use-case may also carry `frames`, the call stack behind its
+hops: frames resolve like hops, every hop must be cited by one, and the edge between
+a frame and its parent is checked against the import graph. The exit code stays 0
+unless --strict is given.
 
 Reference: docs/data-contract.md, sections 7 and 10.3.
 """
@@ -25,14 +28,16 @@ import re
 try:
     from _common import kb, norm_path, read_json, warn, warn_python_version, write_text
     from config import load_config
-    from usecases import (load_usecases, make_file_finder, report_citations, report_total,
+    from usecases import (ROLE_MAX_LEN, STATUSES, canonical_status, load_usecases,
+                          make_file_finder, parse_hop, report_citations, report_total,
                           resolve_use_case)
 except ImportError:  # run as a module: python -m pipeline.prep_data
     from pipeline._common import (kb, norm_path, read_json, warn, warn_python_version,
                                   write_text)
     from pipeline.config import load_config
-    from pipeline.usecases import (load_usecases, make_file_finder, report_citations,
-                                   report_total, resolve_use_case)
+    from pipeline.usecases import (ROLE_MAX_LEN, STATUSES, canonical_status,
+                                   load_usecases, make_file_finder, parse_hop,
+                                   report_citations, report_total, resolve_use_case)
 
 # Contract version written into meta; see docs/data-contract.md.
 CONTRACT = 2
@@ -140,8 +145,175 @@ def unverified_symbol(symbol, record):
             return None
     return f'{symbol} not declared in {record["p"]}'
 
+# --- stack frames (data-contract 7.4) -------------------------------------------
+# A use-case may carry `frames`: the same citations as its hops, but each with a
+# `parent` and an `edge`, so a flow can be read as the call stack it really is
+# instead of a flat list of levels. The pipeline resolves the citation exactly like
+# a hop, derives the depth from the parent chain, caps the frame status at the
+# use-case status and checks the edge against the extractor's import graph: a
+# `call` edge holds when the parent's file imports the child's file, or when both
+# are the same file. Every other edge crosses a process, a transaction or a library
+# boundary the import graph cannot see, so it is reported as not provable instead
+# of red. Frames are meant to be regenerated from the code, never hand-maintained.
 
-def build_ucs(raw_ucs, files, find_file, totals):
+# The seven edge kinds a frame may declare (data-contract 7.4).
+FRAME_EDGES = ('entry', 'call', 'queue', 'on_commit', 'worker', 'inbound', 'other')
+
+# Edges that reopen the stack at depth 0: execution resumes in another process.
+FRAME_REOPEN_EDGES = ('worker', 'inbound')
+
+# The keys of an emitted frame, in the order they are written (data-contract 7.4).
+FRAME_KEYS = ('id', 'parent', 'e', 'i', 's', 'r', 'd', 'reg', 'st', 'en', 'sr',
+              'proof', 'why', 'ok')
+
+
+def status_ceiling(status, uc_status):
+    """A frame status never rises above the status of its use-case.
+
+    STATUSES is ordered from the strongest claim to the weakest, so the ceiling is
+    whichever of the two sits later in it.
+    """
+    return uc_status if STATUSES.index(status) < STATUSES.index(uc_status) else status
+
+
+def frame_depth(frame, by_id):
+    """Distance of a frame from the root of its stack.
+
+    `worker` and `inbound` reopen the stack in another process, so they restart at
+    0. The walk carries its own seen set: a parent cycle in a hand-edited registry
+    stops at the repeated id instead of looping forever.
+    """
+    depth, seen, current = 0, set(), frame
+    while current['parent'] and current['e'] not in FRAME_REOPEN_EDGES:
+        if current['id'] in seen:
+            return depth
+        seen.add(current['id'])
+        parent = by_id.get(current['parent'])
+        if parent is None:
+            return depth
+        depth += 1
+        current = parent
+    return depth
+
+
+def frame_proof(frame, parent, files, edge_set):
+    """The proof state of the edge into `frame`, and the sentence explaining it.
+
+    Five states: `entry` (no parent), `same_file`, `import` (the graph has the
+    edge), `unprovable` (an edge the import graph cannot speak about) and `fail`,
+    which is reserved for a plain `call` the graph does not back.
+    """
+    if parent is None:
+        return 'entry', 'entry point of the stack'
+    if parent['i'] == frame['i']:
+        return 'same_file', 'the parent frame is in the same file'
+    if (parent['i'], frame['i']) in edge_set:
+        return 'import', 'the parent file imports the child file (extractor import graph)'
+    if frame['e'] != 'call':
+        return 'unprovable', f"a {frame['e']} edge is not provable by the import graph"
+    return 'fail', (f"{files[parent['i']]['p']} does not import "
+                    f"{files[frame['i']]['p']} in the import graph")
+
+
+def hops_without_frame(hops, hop_raw, frames, files):
+    """Every hop of a use-case that no frame cites, as (raw hop, explanation).
+
+    Every hop is a frame; not every frame is a hop. A hop matches a frame when both
+    cite the same file and the same symbol; a hop with no symbol matches any frame
+    of its file.
+    """
+    pairs = {(f['i'], f['s']) for f in frames}
+    anywhere = {f['i'] for f in frames}
+    missing = []
+    for hop, raw in zip(hops, hop_raw):
+        if (hop['i'], hop['s']) in pairs or (not hop['s'] and hop['i'] in anywhere):
+            continue
+        cited = files[hop['i']]['p'] + (':' + hop['s'] if hop['s'] else '')
+        missing.append((raw, f'no frame cites {cited}'))
+    return missing
+
+
+def build_frames(uc, resolved, files, find_file, imports, totals):
+    """Resolve the `frames` of one use-case, or None when it declares none.
+
+    Frames whose citation does not resolve are dropped; a frame whose parent is not
+    among the kept frames is dropped with it, cascading; a duplicate id keeps the
+    first frame and warns. Every drop, every undeclared symbol and every hop that no
+    frame cites is reported in the stderr block of data-contract 5.5 and counted for
+    --strict.
+    """
+    raw_frames = uc.get('frames') or []
+    if not raw_frames:
+        return None
+
+    name = uc['name']
+    frames, citation_of, dropped, notes = [], {}, [], []
+    for raw in raw_frames:
+        if not isinstance(raw, dict):
+            dropped.append((str(raw), 'frame must be an object'))
+            continue
+        citation = str(raw.get('hop') or '')
+        frame_id = str(raw.get('id') or '')
+        if not frame_id:
+            dropped.append((citation, 'frame without an "id"'))
+            continue
+        if frame_id in citation_of:
+            warn(f'warning: UC {name}: duplicate frame id "{frame_id}", keeping the first')
+            continue
+        hop, reason = parse_hop(citation, find_file)
+        if hop is None:
+            dropped.append((citation, reason))
+            continue
+        edge = raw.get('edge') or 'call'
+        if edge not in FRAME_EDGES:
+            warn(f'warning: UC {name}: frame {frame_id}: unknown edge "{edge}", using "other"')
+            edge = 'other'
+        note = unverified_symbol(hop['s'], files[hop['i']])
+        if note:
+            notes.append((citation, note))
+        citation_of[frame_id] = citation
+        frames.append({'id': frame_id, 'parent': str(raw.get('parent') or '') or None,
+                       'e': edge, 'i': hop['i'], 's': hop['s'],
+                       'r': str(raw.get('role') or '')[:ROLE_MAX_LEN],
+                       'reg': str(raw.get('registry') or ''),
+                       'st': status_ceiling(canonical_status(raw.get('status') or uc['status'],
+                                                             name), uc['status']),
+                       'en': str(raw.get('edge_note') or ''),
+                       'sr': str(raw.get('status_reason') or '')})
+
+    # A frame is only as reachable as its parent: dropping one drops its subtree.
+    by_id = {f['id']: f for f in frames}
+    orphans = [f for f in frames if f['parent'] and f['parent'] not in by_id]
+    while orphans:
+        for frame in orphans:
+            dropped.append((citation_of[frame['id']],
+                            f'parent "{frame["parent"]}" not in frames'))
+            del by_id[frame['id']]
+        frames = [f for f in frames if f['id'] in by_id]
+        orphans = [f for f in frames if f['parent'] and f['parent'] not in by_id]
+
+    edge_set = {(source, target) for source, target in imports}
+    for frame in frames:
+        parent = by_id.get(frame['parent']) if frame['parent'] else None
+        frame['d'] = frame_depth(frame, by_id)
+        frame['proof'], frame['why'] = frame_proof(frame, parent, files, edge_set)
+        frame['ok'] = frame['proof'] != 'fail'
+    frames = [{key: frame[key] for key in FRAME_KEYS} for frame in frames]
+
+    unframed = hops_without_frame(resolved['hops'], resolved['hop_raw'], frames, files)
+    report_citations(name, 'frames', len(frames), len(frames) + len(dropped), dropped, notes,
+                     [('hop without frame', why, raw) for raw, why in unframed])
+
+    totals['frames'] = totals.get('frames', 0) + len(frames)
+    totals['frames_dropped'] = totals.get('frames_dropped', 0) + len(dropped)
+    totals['unframed_hops'] = totals.get('unframed_hops', 0) + len(unframed)
+    if dropped:
+        totals['frame_use_cases'] = totals.get('frame_use_cases', 0) + 1
+    return frames
+# --- end stack frames ------------------------------------------------------------
+
+
+def build_ucs(raw_ucs, files, find_file, totals, imports=()):
     """Resolve every use-case into the viewer's shape, reporting what did not check out."""
     ucs = []
     for uc in raw_ucs:
@@ -161,9 +333,13 @@ def build_ucs(raw_ucs, files, find_file, totals):
         report_citations(resolved['name'], 'hops', len(hops), len(hops) + len(dropped),
                          dropped, notes)
 
-        ucs.append({'name': uc['name'], 'actor': uc['actor'], 'goal': uc['goal'],
-                    'seam': uc['seam_crossing'], 'rules': uc['rules'],
-                    'status': uc['status'], 'hops': hops})
+        record = {'name': uc['name'], 'actor': uc['actor'], 'goal': uc['goal'],
+                  'seam': uc['seam_crossing'], 'rules': uc['rules'],
+                  'status': uc['status'], 'hops': hops}
+        frames = build_frames(uc, resolved, files, find_file, imports, totals)
+        if frames:
+            record['frames'] = frames
+        ucs.append(record)
     return ucs
 
 
@@ -180,13 +356,24 @@ def main():
     imports = build_imports(im, path_index)
 
     find_file = make_file_finder(path_index, config['hop_path_prefixes'])
-    totals = {'hops': 0, 'dropped': 0, 'use_cases': 0}
-    ucs = build_ucs(raw_ucs, files, find_file, totals)
+    totals = {'hops': 0, 'dropped': 0, 'use_cases': 0, 'frames': 0, 'frames_dropped': 0,
+              'unframed_hops': 0, 'frame_use_cases': 0}
+    ucs = build_ucs(raw_ucs, files, find_file, totals, imports)
     report_total('hops', totals['hops'], totals['dropped'], totals['use_cases'])
+    report_total('frames', totals['frames'], totals['frames_dropped'],
+                 totals['frame_use_cases'])
 
-    if args.strict and totals['dropped']:
-        warn(f"strict: {totals['dropped']} citations dropped")
-        raise SystemExit(STRICT_EXIT)
+    if args.strict:
+        problems = []
+        if totals['dropped']:
+            problems.append(f"{totals['dropped']} citations dropped")
+        if totals['frames_dropped']:
+            problems.append(f"{totals['frames_dropped']} frames dropped")
+        if totals['unframed_hops']:
+            problems.append(f"{totals['unframed_hops']} hops without a frame")
+        if problems:
+            warn('strict: ' + ', '.join(problems))
+            raise SystemExit(STRICT_EXIT)
 
     data = {'meta': {'contract': CONTRACT, 'repo': config['repo'], 'commit': config['commit'],
                      'date': config['date'], 'lang': config['lang'],
@@ -194,8 +381,11 @@ def main():
                      'nimports': len(imports), 'nucs': len(ucs)},
             'files': files, 'imports': imports, 'ucs': ucs}
     nbytes = write_text(args.out, json.dumps(data, ensure_ascii=False, separators=(',', ':')))
+    # `frames=` only appears for a registry that declares frames, so the counter line
+    # of every other build is the one it has always been.
+    frames = f" frames={totals['frames']}" if totals['frames'] else ''
     print(f'files={len(files)} imports={len(imports)} ucs={len(ucs)} '
-          f"hops={totals['hops']} -> {args.out} ({kb(nbytes)}KB)")
+          f"hops={totals['hops']}{frames} -> {args.out} ({kb(nbytes)}KB)")
 
 
 if __name__ == '__main__':
