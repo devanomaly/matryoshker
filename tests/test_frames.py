@@ -14,6 +14,7 @@ Reference: docs/data-contract.md, sections 4.4, 5.5, 7.4, 10.3 and 11.
 """
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -319,6 +320,154 @@ def test_use_cases_without_frames_are_not_subject_to_the_invariant(extraction, c
 
 
 # ---------------------------------------------------------------------------
+# a stack must reach a root
+# ---------------------------------------------------------------------------
+
+VIEW = 'orders/api/views.py:CheckoutView'
+SERVICE = 'orders/services/checkout.py:CheckoutService.place'
+
+
+def test_a_parent_cycle_is_dropped_because_it_never_reaches_a_root(extraction, tmp_path, capsys):
+    registry = write_registry(tmp_path, one_uc(frames=[
+        {'id': 'R', 'parent': None, 'edge': 'entry', 'hop': VIEW},
+        {'id': 'A', 'parent': 'B', 'edge': 'call', 'hop': VIEW},
+        {'id': 'B', 'parent': 'A', 'edge': 'call', 'hop': SERVICE}]))
+    ucs, totals = build(extraction, registry)
+    assert [f['id'] for f in frames_of(ucs)] == ['R'], 'the rooted frame survives, the cycle does not'
+    assert totals['frames_dropped'] == 2
+    stderr = capsys.readouterr().err
+    assert 'dropped [parent chain of "A" never reaches a root]' in stderr
+    assert 'dropped [parent chain of "B" never reaches a root]' in stderr
+
+
+def test_a_frame_that_is_its_own_parent_is_dropped(extraction, tmp_path, capsys):
+    registry = write_registry(tmp_path, one_uc(frames=[
+        {'id': 'A', 'parent': 'A', 'edge': 'call', 'hop': VIEW}]))
+    ucs, totals = build(extraction, registry)
+    assert 'frames' not in ucs[0]
+    assert totals['frames_dropped'] == 1
+    assert 'dropped [parent chain of "A" never reaches a root]' in capsys.readouterr().err
+
+
+def test_a_worker_frame_is_still_a_frame_of_its_parents_stack(extraction):
+    """Reopening the depth is not the same as being a root: S7 hangs off S6."""
+    ucs, totals = build(extraction, USECASES)
+    assert by_id(frames_of(ucs))['S7']['parent'] == 'S6'
+    assert totals['frames_dropped'] == 0
+
+
+# ---------------------------------------------------------------------------
+# rules of 4.4 that are kept but warned about
+# ---------------------------------------------------------------------------
+
+def test_an_other_edge_without_a_note_warns(extraction, tmp_path, capsys):
+    registry = write_registry(tmp_path, one_uc(frames=[
+        {'id': 'A', 'parent': None, 'edge': 'entry', 'hop': VIEW},
+        {'id': 'B', 'parent': 'A', 'edge': 'other', 'hop': SERVICE}]))
+    ucs, _ = build(extraction, registry)
+    assert len(frames_of(ucs)) == 2, 'warned, not dropped'
+    assert 'warning: UC UC: frame B: edge "other" without an edge_note' in capsys.readouterr().err
+
+
+def test_a_line_reference_in_a_frame_citation_warns(extraction, tmp_path, capsys):
+    registry = write_registry(tmp_path, one_uc(frames=[
+        {'id': 'A', 'parent': None, 'edge': 'entry', 'hop': VIEW},
+        {'id': 'B', 'parent': 'A', 'edge': 'call', 'hop': 'orders/services/checkout.py:120'},
+        {'id': 'C', 'parent': 'A', 'edge': 'call', 'hop': 'orders/services/checkout.py:10-20'}]))
+    ucs, _ = build(extraction, registry)
+    assert len(frames_of(ucs)) == 3
+    stderr = capsys.readouterr().err
+    assert 'warning: UC UC: frame B: line reference "120" in a frame citation' in stderr
+    assert 'warning: UC UC: frame C: line reference "10-20" in a frame citation' in stderr
+
+
+def test_an_entry_edge_with_a_parent_warns(extraction, tmp_path, capsys):
+    registry = write_registry(tmp_path, one_uc(frames=[
+        {'id': 'A', 'parent': None, 'edge': 'entry', 'hop': VIEW},
+        {'id': 'B', 'parent': 'A', 'edge': 'entry', 'hop': SERVICE}]))
+    ucs, _ = build(extraction, registry)
+    assert len(frames_of(ucs)) == 2
+    assert 'warning: UC UC: frame B: edge "entry" on a frame that has a parent' in capsys.readouterr().err
+
+
+def test_the_committed_fixture_triggers_none_of_those_warnings(extraction, capsys):
+    build(extraction, USECASES)
+    assert 'warning:' not in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# one vocabulary, several places: the copies are compared, not trusted
+# ---------------------------------------------------------------------------
+
+CONTRACT = os.path.join(REPO_ROOT, 'docs', 'data-contract.md')
+SCHEMA = os.path.join(REPO_ROOT, 'schemas', 'usecases.schema.json')
+TEMPLATE = os.path.join(REPO_ROOT, 'viewer', 'template.html')
+
+
+def text_of(path):
+    with open(path, encoding='utf-8') as fh:
+        return fh.read()
+
+
+def contract_slice(start, end):
+    text = text_of(CONTRACT)
+    begin = text.index(start)
+    return text[begin:text.index(end, begin + len(start))]
+
+
+def js_object_keys(name):
+    """The keys of the top-level `const <name> = {...};` literal of the viewer."""
+    match = re.search(r'const %s = \{(.*?)\};' % name, text_of(TEMPLATE), re.S)
+    assert match, f'const {name} not found in viewer/template.html'
+    return re.findall(r"(\w+)\s*:\s*[\['\"]", match.group(1))
+
+
+def test_the_contract_key_table_lists_exactly_the_emitted_keys():
+    table = contract_slice('#### `ucs[].frames`', 'Those fourteen keys')
+    documented = re.findall(r'^\| `(\w+)` \|', table, re.M)
+    assert tuple(documented) == prep_data.FRAME_KEYS, (
+        'docs/data-contract.md 7.4 must list the emitted frame keys exactly, in order')
+    assert len(prep_data.FRAME_KEYS) == 14, 'the contract says "fourteen keys"'
+
+
+def test_the_contract_proof_table_lists_exactly_the_proof_states():
+    table = contract_slice('**The five proof states**', '`fail` is the only red state')
+    documented = re.findall(r'^\| `(\w+)` \|', table, re.M)
+    assert documented[0] == 'proof', 'the header cell of the table'
+    assert tuple(documented[1:]) == prep_data.FRAME_PROOFS
+    assert len(prep_data.FRAME_PROOFS) == 5, 'the contract says "five proof states"'
+
+
+def test_the_fixture_reaches_exactly_the_declared_proof_states(extraction):
+    ucs, _ = build(extraction, USECASES)
+    assert {f['proof'] for f in frames_of(ucs)} == set(prep_data.FRAME_PROOFS), (
+        'the fixture reaches every declared state, so an undeclared one would show here')
+
+
+def test_the_contract_names_exactly_the_edge_kinds():
+    paragraph = contract_slice('**Edge kinds.**', '`worker` and `inbound` reopen')
+    assert tuple(re.findall(r'`(\w+)` \(', paragraph)) == prep_data.FRAME_EDGES
+
+
+def test_the_schema_edge_enum_is_the_pipeline_edge_list():
+    enum = read(SCHEMA)['definitions']['frame']['properties']['edge']['enum']
+    assert tuple(enum) == prep_data.FRAME_EDGES
+
+
+def test_the_viewer_tables_cover_every_edge_and_every_proof():
+    assert set(js_object_keys('STACK_GLYPH')) == set(prep_data.FRAME_EDGES)
+    assert set(js_object_keys('STACK_PROOF')) == set(prep_data.FRAME_PROOFS)
+    # entry and call draw no kind label and `other` shows its note; the rest need a string
+    labelled = set(prep_data.FRAME_EDGES) - {'entry', 'call', 'other'}
+    assert set(js_object_keys('STACK_EDGE')) == labelled
+    html = text_of(TEMPLATE)
+    for proof in prep_data.FRAME_PROOFS:
+        assert f"'flow.stack.proof.{proof}'" in html
+    for edge in labelled:
+        assert f"'flow.stack.edge.{edge}'" in html
+
+
+# ---------------------------------------------------------------------------
 # --strict, through the CLI
 # ---------------------------------------------------------------------------
 
@@ -359,6 +508,25 @@ def test_strict_exits_three_on_a_dropped_frame(tmp_path):
     result = run_prep_data(tmp_path / 'data.json', registry)
     assert result.returncode == prep_data.STRICT_EXIT
     assert 'strict: 1 frames dropped' in result.stderr
+
+
+def test_strict_exits_three_on_a_parent_cycle(tmp_path):
+    registry = write_registry(tmp_path, one_uc(frames=[
+        {'id': 'A', 'parent': 'B', 'edge': 'call', 'hop': VIEW},
+        {'id': 'B', 'parent': 'A', 'edge': 'call', 'hop': SERVICE}]))
+    result = run_prep_data(tmp_path / 'data.json', registry)
+    assert result.returncode == prep_data.STRICT_EXIT
+    assert 'strict: 2 frames dropped' in result.stderr
+
+
+def test_a_failing_proof_is_a_finding_not_a_gate(tmp_path):
+    """`fail` is drawn red and never affects --strict: the registry often cannot fix
+    it (the committed fixture carries one on purpose), so gating on it would make an
+    honest registry unbuildable (data-contract 7.4, 10.3)."""
+    result = run_prep_data(tmp_path / 'data.json', USECASES)
+    assert result.returncode == 0, result.stderr
+    data = read(str(tmp_path / 'data.json'))
+    assert [f['id'] for f in data['ucs'][WITH_FRAMES]['frames'] if f['proof'] == 'fail'] == ['S8']
 
 
 def test_without_strict_the_same_registry_exits_zero(tmp_path):
@@ -402,6 +570,9 @@ def test_the_committed_extraction_is_what_the_extractor_still_emits(tmp_path):
         'a module-level import of the same module is seen, so the blindness above is '
         'about where the import sits, not about the module')
 
-    fresh_structure = read(str(run_dir / 'es-output.json'))
-    assert (sorted(r['path'] for r in fresh_structure['results'])
-            == sorted(r['path'] for r in read(ES)['results']))
+    # whole records, not just their paths: a class that lost a method is drift too
+    fresh_records = {r['path']: r for r in read(str(run_dir / 'es-output.json'))['results']}
+    committed_records = {r['path']: r for r in read(ES)['results']}
+    assert fresh_records == committed_records, (
+        'tests/fixtures/stack-frames/es-output.json has drifted from repo/; regenerate '
+        'it with extractor/extract.mjs (docs/data-contract.md 10.1)')

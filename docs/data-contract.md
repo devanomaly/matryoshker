@@ -340,11 +340,20 @@ the next edit; the evidence for an edge (which line of the parent calls the chil
 belongs in a commit-dated artifact outside the registry, not in a file meant to survive
 refactors.
 
-**Frames are regenerated, never hand-maintained.** They are a derived reading of the
-code and go stale the moment the code moves: regenerate a use-case's frames when a file
-one of its hops cites changes, and let `--strict` (§10.3) fail the build until they
-resolve again. Nothing in the pipeline or the viewer holds a list of file names, symbol
-names or flows that a human has to keep current.
+**Frames are a derived reading of the code, not a second thing to curate.** They are
+produced outside this repository — by an agent or a script reading the code — and this
+tool ships no generator: it resolves, checks and draws what it is given. They go stale
+the moment the code moves, so re-produce a use-case's frames when a file one of its hops
+cites changes. `--strict` (§10.3) catches part of that staleness and only part: it fails
+on a frame whose **file** is gone (dropped), on a frame detached from its stack, and on a
+hop no frame cites. It does **not** fail on a renamed symbol (an `unverified symbol`
+warning, §5.4) nor on a `fail` proof (§7.4), which is a finding to read, not a gate.
+Nothing in the pipeline or the viewer holds a list of file names, symbol names or flows
+that a human has to keep current.
+
+**Three rules are warned about, never enforced**: an `other` edge without an
+`edge_note`, a line reference in a frame citation, and an `entry` edge on a frame that
+has a parent. The frame is kept and drawn; the warning (§11) is for the author.
 
 ```json
 {
@@ -506,8 +515,8 @@ on the map, so authors must fix it in the registry.
 
 ### 5.5 Reporting (stderr) and totals
 
-Per use-case, printed only when the use-case has at least one dropped citation or one
-unverified symbol:
+Per use-case, printed only when the use-case has at least one dropped citation, one
+unverified symbol or, in its `frames` block (§7.4), one hop that no frame cites:
 
 ```
 UC <name>: <resolved>/<total> hops resolved
@@ -515,12 +524,17 @@ UC <name>: <resolved>/<total> hops resolved
   unverified symbol [<symbol> not declared in <path>]: <raw hop>
 UC <name>: <resolved>/<total> entry points resolved
   dropped [<reason>]: <raw entry point>
+UC <name>: <resolved>/<total> frames resolved
+  dropped [<reason>]: <raw frame citation>
+  unverified symbol [<symbol> not declared in <path>]: <raw frame citation>
+  hop without frame [no frame cites <path>[:<symbol>]]: <raw hop>
 ```
 
 Then, only when something was dropped:
 
 ```
 total: <resolved>/<total> hops resolved (<dropped> dropped in <n> use-cases)
+total: <resolved>/<total> frames resolved (<dropped> dropped in <n> use-cases)
 total: <resolved>/<total> entry points resolved (<dropped> dropped in <n> use-cases)
 ```
 
@@ -834,9 +848,14 @@ parts.
 **What is dropped.** A frame whose citation does not resolve is dropped with the reason
 of §5.3, like a hop. A frame whose `parent` is not among the kept frames is dropped too,
 cascading through its subtree, with the reason `parent "<id>" not in frames` — a frame
-detached from its stack would otherwise be silently redrawn as a root. A frame without
-an `id` is dropped; a repeated `id` keeps the first and warns. Every drop counts toward
-`--strict`.
+detached from its stack would otherwise be silently redrawn as a root. A frame whose
+parent chain never reaches a root — a parent cycle, or a frame that names itself — is
+dropped with the reason `parent chain of "<id>" never reaches a root`: such a stack has
+no top to draw from, and `d` is undefined for it. An item of `frames` that is not an
+object is dropped (`frame must be an object`), and so is a frame without an `id`
+(`frame without an "id"`); a repeated `id` keeps the first and warns. Every drop counts
+toward `--strict`. `worker` and `inbound` restart the depth at 0 but are still frames of
+their parent's stack: they need a parent chain that reaches a root like any other.
 
 ---
 
@@ -1076,8 +1095,11 @@ stderr line kinds, each on its own line, no other prefixes:
 
 - `warning: <message>` — deprecated key, unknown key/option, unknown status or lang,
   undeclared category, missing parser files, and, for frames (4.4),
-  `warning: UC <name>: frame <id>: unknown edge "<x>", using "other"` and
-  `warning: UC <name>: duplicate frame id "<id>", keeping the first`;
+  `warning: UC <name>: frame <id>: unknown edge "<x>", using "other"`,
+  `warning: UC <name>: duplicate frame id "<id>", keeping the first`,
+  `warning: UC <name>: frame <id>: edge "other" without an edge_note`,
+  `warning: UC <name>: frame <id>: edge "entry" on a frame that has a parent` and
+  `warning: UC <name>: frame <id>: line reference "<n>" in a frame citation`;
 - `UC <name>: k/n hops resolved` / `UC <name>: k/n entry points resolved` /
   `UC <name>: k/n frames resolved` followed by indented `  dropped [<reason>]: <raw>`
   and `  unverified symbol [...]: <raw>` lines;
@@ -1329,10 +1351,12 @@ source follows whatever is left.
   the pipeline's `k` decides whether there is one to drop, so the vocabulary is not
   duplicated in the viewer.
 - A use-case that carries `frames` (7.4) can be read two ways, and **levels is the
-  default**: selecting it draws the same hop levels as any other use-case, with a
-  toggle (`flow.stack.show`) beside the title. The toggle swaps to the stack view and
-  back (`flow.stack.hide`); nothing else in the viewer changes, and a use-case without
-  frames never shows the control. The choice is per session, not persisted.
+  default**: a page load always starts in levels, with a toggle (`flow.stack.show`)
+  beside the title of any use-case that has frames. The toggle swaps to the stack view
+  and back (`flow.stack.hide`); nothing else in the viewer changes, and a use-case
+  without frames never shows the control. The reading chosen last is kept for the rest
+  of the session — selecting another use-case with frames opens it in that reading —
+  and is not persisted: the stack is only ever reached through the toggle.
 - The **stack view** draws one row per frame, indented by `d`, each connected to its
   parent: a `call` edge by a plain L-shaped connector, every other kind dashed in the
   accent with its kind named inside the node (an `other` edge shows its `en` note
@@ -1342,6 +1366,7 @@ source follows whatever is left.
   one drawn in `--crit`. A `sr` that starts with `mock:` adds `flow.stack.mocked`.
 - The stack is fitted with `fitTop()` — width only, never above 1:1, top pinned under
   the crumbs — because a call stack is read top-down, not squeezed into the viewport.
+  Every refit goes through it while the stack is drawn, a window resize included.
 - The **detail panel** is unaffected: it lists the registry's own lines in JSON order,
   prefix visible, because that is what an author needs when correcting the file. With
   frames it adds a second, indented list under `detail.frames`, one row per frame with
@@ -1371,7 +1396,8 @@ data must always produce the same map, because the drag offsets saved in
   available as an SVG `<title>`: on the label in Packages, and on the box group in
   Context, where it is emitted only when the name was actually clipped, so an untruncated
   box carries no native tooltip repeating the label it already shows.
-- `fit()` and `centerOn()` are view operations, not layout: they may read the viewport.
+- `fit()`, `fitTop()` and `centerOn()` are view operations, not layout: they may read
+  the viewport.
 
 ### 13.6 Stars panel
 

@@ -82,9 +82,12 @@ every edge against the import graph; `--strict` fails on a hop no frame cites. T
 key list and the five edge-proof states are in `docs/data-contract.md` sections 4.4 and
 7.4, with a worked example under `tests/fixtures/stack-frames/`.
 
-Frames are **regenerated, not maintained**: regenerate a use-case's frames whenever a
-file one of its hops cites changes, and let `--strict` tell you when they have gone
-stale. Leave the key out entirely and nothing about your build changes.
+Frames are a **derived reading of the code, not a second thing to curate**: they are
+produced outside this repository (by an agent or a script reading the code — no generator
+ships here) and re-produced whenever a file one of the use-case's hops cites changes.
+`--strict` catches a frame whose file is gone and a hop no frame cites; it does not catch
+a renamed symbol (a warning) or a `fail` edge (a red row to read). Leave the key out
+entirely and nothing about your build changes.
 
 #### What `prep_data.py` checks — and what it does not
 

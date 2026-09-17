@@ -45,7 +45,8 @@ CONTRACT = 2
 # A hop symbol that is a line reference (":120", ":120-145") instead of a name.
 LINE_REF = re.compile(r'^\d+(?:-\d+)?$')
 
-# Exit code used when --strict is given and at least one citation was dropped.
+# Exit code used when --strict is given and a citation or a frame was dropped, or a
+# hop has no frame.
 STRICT_EXIT = 3
 
 
@@ -63,7 +64,7 @@ def parse_args():
     ap.add_argument('--out', required=True, metavar='FILE',
                     help='path of the data.json to write')
     ap.add_argument('--strict', action='store_true',
-                    help=f'exit {STRICT_EXIT} when at least one hop was dropped')
+                    help=f'exit {STRICT_EXIT} when a hop or a frame was dropped, or a hop has no frame')
     return ap.parse_args()
 
 
@@ -154,13 +155,17 @@ def unverified_symbol(symbol, record):
 # `call` edge holds when the parent's file imports the child's file, or when both
 # are the same file. Every other edge crosses a process, a transaction or a library
 # boundary the import graph cannot see, so it is reported as not provable instead
-# of red. Frames are meant to be regenerated from the code, never hand-maintained.
+# of red. Frames are a derived reading of the code, produced outside this tool: it
+# resolves, checks and draws them, and ships no generator.
 
 # The seven edge kinds a frame may declare (data-contract 7.4).
 FRAME_EDGES = ('entry', 'call', 'queue', 'on_commit', 'worker', 'inbound', 'other')
 
 # Edges that reopen the stack at depth 0: execution resumes in another process.
 FRAME_REOPEN_EDGES = ('worker', 'inbound')
+
+# The five proof states of an edge, in the order frame_proof() evaluates them.
+FRAME_PROOFS = ('entry', 'same_file', 'import', 'unprovable', 'fail')
 
 # The keys of an emitted frame, in the order they are written (data-contract 7.4).
 FRAME_KEYS = ('id', 'parent', 'e', 'i', 's', 'r', 'd', 'reg', 'st', 'en', 'sr',
@@ -180,20 +185,29 @@ def frame_depth(frame, by_id):
     """Distance of a frame from the root of its stack.
 
     `worker` and `inbound` reopen the stack in another process, so they restart at
-    0. The walk carries its own seen set: a parent cycle in a hand-edited registry
-    stops at the repeated id instead of looping forever.
+    0. Every frame that gets here reaches a root (build_frames drops the ones that do
+    not), so the walk terminates.
     """
-    depth, seen, current = 0, set(), frame
+    depth, current = 0, frame
     while current['parent'] and current['e'] not in FRAME_REOPEN_EDGES:
-        if current['id'] in seen:
-            return depth
-        seen.add(current['id'])
-        parent = by_id.get(current['parent'])
-        if parent is None:
-            return depth
         depth += 1
-        current = parent
+        current = by_id[current['parent']]
     return depth
+
+
+def reaches_root(frame, by_id):
+    """Whether following `parent` from `frame` ends at a frame that has none.
+
+    False for a frame whose parent is missing and for every member of a parent cycle,
+    a frame that names itself included.
+    """
+    seen, current = set(), frame
+    while current['parent']:
+        if current['id'] in seen or current['parent'] not in by_id:
+            return False
+        seen.add(current['id'])
+        current = by_id[current['parent']]
+    return True
 
 
 def frame_proof(frame, parent, files, edge_set):
@@ -237,10 +251,12 @@ def build_frames(uc, resolved, files, find_file, imports, totals):
     """Resolve the `frames` of one use-case, or None when it declares none.
 
     Frames whose citation does not resolve are dropped; a frame whose parent is not
-    among the kept frames is dropped with it, cascading; a duplicate id keeps the
-    first frame and warns. Every drop, every undeclared symbol and every hop that no
-    frame cites is reported in the stderr block of data-contract 5.5 and counted for
-    --strict.
+    among the kept frames is dropped with it, cascading; a frame whose parent chain
+    never reaches a root (a cycle) is dropped; a duplicate id keeps the first frame
+    and warns. Every drop and every hop that no frame cites is reported in the stderr
+    block of data-contract 5.5 and counted for --strict; an undeclared symbol and a
+    rule of 4.4 that was bent (an `other` edge with no note, a line reference, an
+    `entry` edge under a parent) are reported and never fatal.
     """
     raw_frames = uc.get('frames') or []
     if not raw_frames:
@@ -268,11 +284,20 @@ def build_frames(uc, resolved, files, find_file, imports, totals):
         if edge not in FRAME_EDGES:
             warn(f'warning: UC {name}: frame {frame_id}: unknown edge "{edge}", using "other"')
             edge = 'other'
+        parent_id = str(raw.get('parent') or '') or None
+        if edge == 'other' and not str(raw.get('edge_note') or '').strip():
+            warn(f'warning: UC {name}: frame {frame_id}: edge "other" without an edge_note')
+        if edge == 'entry' and parent_id:
+            warn(f'warning: UC {name}: frame {frame_id}: edge "entry" on a frame that has '
+                 f'a parent')
+        if LINE_REF.match(hop['s']):
+            warn(f'warning: UC {name}: frame {frame_id}: line reference "{hop["s"]}" in a '
+                 f'frame citation')
         note = unverified_symbol(hop['s'], files[hop['i']])
         if note:
             notes.append((citation, note))
         citation_of[frame_id] = citation
-        frames.append({'id': frame_id, 'parent': str(raw.get('parent') or '') or None,
+        frames.append({'id': frame_id, 'parent': parent_id,
                        'e': edge, 'i': hop['i'], 's': hop['s'],
                        'r': str(raw.get('role') or '')[:ROLE_MAX_LEN],
                        'reg': str(raw.get('registry') or ''),
@@ -291,6 +316,15 @@ def build_frames(uc, resolved, files, find_file, imports, totals):
             del by_id[frame['id']]
         frames = [f for f in frames if f['id'] in by_id]
         orphans = [f for f in frames if f['parent'] and f['parent'] not in by_id]
+
+    # What is left has every parent present, so a frame that still cannot reach a root
+    # sits on a parent cycle (or names itself). Such a stack has no top to draw from.
+    unrooted = [f for f in frames if not reaches_root(f, by_id)]
+    for frame in unrooted:
+        dropped.append((citation_of[frame['id']],
+                        f'parent chain of "{frame["id"]}" never reaches a root'))
+        del by_id[frame['id']]
+    frames = [f for f in frames if f['id'] in by_id]
 
     edge_set = {(source, target) for source, target in imports}
     for frame in frames:

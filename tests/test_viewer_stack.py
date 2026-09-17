@@ -200,3 +200,15 @@ def test_the_toggle_is_clickable_and_names_both_directions(drawn):
     assert 'flow.stack.show' in drawn['toggleOn']
     assert 'flow.stack.hide' in drawn['toggleOff']
     assert '<rect' in drawn['toggleOn'], 'the toggle must have a hit area of its own'
+
+
+def test_a_resize_keeps_the_stack_pinned_to_the_top(viewer_template):
+    """fit() recentres vertically; a stack is read top-down, so a resize while the
+    stack is drawn must go through fitTop() like every other refit (13.5)."""
+    with open(viewer_template, encoding='utf-8') as fh:
+        html = fh.read()
+    handler = re.search(r"addEventListener\('resize',\s*(.*?)\);\n", html)
+    assert handler, 'resize handler not found'
+    assert re.search(r'isStackDrawn\(\)\s*\?\s*fitTop\(\)\s*:\s*fit\(\)', handler.group(1)), (
+        'the resize handler must dispatch on isStackDrawn(), got: ' + handler.group(1))
+

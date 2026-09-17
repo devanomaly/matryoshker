@@ -1740,6 +1740,6 @@ document.getElementById('commitline').textContent =
 refreshUCChips();
 render();
 fit();
-window.addEventListener('resize', fit);
+window.addEventListener('resize', () => isStackDrawn() ? fitTop() : fit());
 })();
 </script>

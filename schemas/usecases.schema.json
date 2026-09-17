@@ -29,7 +29,7 @@
       "type": "object",
       "additionalProperties": true,
       "required": ["id", "hop"],
-      "description": "One frame of the call stack behind the hops (data-contract.md 4.4). Frames are regenerated from the code, never hand-maintained.",
+      "description": "One frame of the call stack behind the hops (data-contract.md 4.4). Frames are a derived reading of the code, produced outside this tool and re-produced when a cited file changes.",
       "properties": {
         "id": {
           "type": "string",
@@ -50,11 +50,11 @@
         "edge_note": {
           "type": "string",
           "default": "",
-          "description": "What the boundary is. Required in practice when edge is \"other\"."
+          "description": "What the boundary is. Expected when edge is \"other\"; its absence is a warning, not an error."
         },
         "hop": {
           "$ref": "#/definitions/citation",
-          "description": "Citation of this frame, same grammar as a hop (data-contract.md 5.1). An inherited method cites the class that declares it, with the method name in role. No line numbers."
+          "description": "Citation of this frame, same grammar as a hop (data-contract.md 5.1). An inherited method cites the class that declares it, with the method name in role. No line numbers: a line reference is kept but warned about."
         },
         "role": {
           "type": "string",
