@@ -323,6 +323,10 @@ A frame is an object, not a string:
 | `status_reason` | string | `""` | why. The prefix `mock:` means "executed with mocked data" — it is a note, not a sixth status |
 | any other key | any | — | kept in the file, ignored by the pipeline |
 
+`frames` must be an array when present; any other type is a fatal input error (§11,
+`--ucs: use-case "<name>": frames must be an array of frame objects`). A `null` or an
+absent key means the use-case declares no frames.
+
 **Edge kinds.** `entry` (nothing called it), `call` (an ordinary synchronous call),
 `queue` (published to a queue), `on_commit` (armed to run when the unit of work
 commits), `worker` (a worker process picked the job up), `inbound` (something outside

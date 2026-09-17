@@ -139,6 +139,10 @@ def load_usecases(path, label='--ucs', report_status=True):
             for k, item in enumerate(value):
                 if not isinstance(item, str):
                     raise SystemExit(f'{label}: use-case "{name}": {key}[{k}] must be a string')
+        # `frames` is optional (data-contract 4.4); when present it is an array of frame
+        # objects. Anything else is a fatal input error (11), never a traceback downstream.
+        if uc.get('frames') is not None and not isinstance(uc['frames'], list):
+            raise SystemExit(f'{label}: use-case "{name}": frames must be an array of frame objects')
         uc['seam_crossing'] = bool(uc['seam_crossing'])
         uc['status'] = canonical_status(uc.get('status'), name, report_status)
         ucs.append(uc)

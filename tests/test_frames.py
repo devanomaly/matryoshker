@@ -3,8 +3,9 @@
 Everything here runs against `tests/fixtures/stack-frames/`: a small English repo
 (`repo/orders/…`) and the extraction the real extractor produced from it, committed
 beside it. The registry of that fixture exercises the five proof states, the status
-ceiling and every edge kind the stack view draws, so these tests assert on a build of
-real code rather than on hand-written index arithmetic.
+ceiling and every edge kind but `on_commit` (which has its own parametrized case
+below), so these tests assert on a build of real code rather than on hand-written
+index arithmetic.
 
 One test needs `node` (it re-runs the extractor to prove the committed extraction is
 still what the extractor emits, and that the function-body import really is invisible
@@ -23,6 +24,7 @@ import pytest
 from conftest import REPO_ROOT, skip_without_node
 
 from pipeline import prep_data, usecases
+from pipeline.usecases import ROLE_MAX_LEN
 from pipeline.config import load_config
 
 FIXTURE = os.path.join(REPO_ROOT, 'tests', 'fixtures', 'stack-frames')
@@ -402,7 +404,8 @@ def test_a_hop_citing_a_method_is_not_matched_by_a_frame_citing_only_its_class(
 def test_a_frame_that_is_not_a_hop_is_never_reported(extraction, capsys):
     """Not every frame is a hop: that asymmetry is the point of the feature."""
     ucs, totals = build(extraction, USECASES)
-    registry_only = [f['id'] for f in frames_of(ucs) if f['reg'] == 'frame only']
+    hop_pairs = {(h['i'], h['s']) for h in ucs[WITH_FRAMES]['hops']}
+    registry_only = [f['id'] for f in frames_of(ucs) if (f['i'], f['s']) not in hop_pairs]
     assert registry_only, 'the fixture must carry frames the flat registry never lists'
     assert totals['unframed_hops'] == 0
     assert 'hop without frame' not in capsys.readouterr().err
@@ -413,6 +416,60 @@ def test_use_cases_without_frames_are_not_subject_to_the_invariant(extraction, c
     assert totals['unframed_hops'] == 0, (
         'the second fixture use-case has three hops and no frames at all')
     assert 'frames resolved' not in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# what the evidence review asked the suite to pin (PR #17 review, 2026-09)
+# ---------------------------------------------------------------------------
+
+def test_the_fixture_exercises_every_edge_kind_but_on_commit():
+    edges = {frame.get('edge', 'call') for frame in read(USECASES)[WITH_FRAMES]['frames']}
+    assert edges == set(prep_data.FRAME_EDGES) - {'on_commit'}, (
+        'the module docstring promises exactly this; on_commit is covered by '
+        'test_a_queue_or_on_commit_edge_the_publisher_does_not_import_fails')
+
+
+def test_a_role_longer_than_the_limit_is_truncated(extraction, tmp_path):
+    registry = write_registry(tmp_path, one_uc(frames=[
+        {'id': 'A', 'parent': None, 'edge': 'entry', 'hop': VIEW, 'role': 'x' * (ROLE_MAX_LEN + 1)}]))
+    ucs, _ = build(extraction, registry)
+    assert frames_of(ucs)[0]['r'] == 'x' * ROLE_MAX_LEN
+
+
+def test_an_empty_parent_becomes_null_and_a_bare_file_an_empty_symbol(extraction, tmp_path):
+    registry = write_registry(tmp_path, one_uc(frames=[
+        {'id': 'A', 'parent': '', 'edge': 'entry', 'hop': 'orders/api/views.py'}]))
+    ucs, _ = build(extraction, registry)
+    frame = frames_of(ucs)[0]
+    assert frame['parent'] is None
+    assert frame['s'] == ''
+    assert frame['d'] == 0 and frame['proof'] == 'entry'
+
+
+def test_a_non_object_item_and_a_frame_without_an_id_are_dropped_and_counted(
+        extraction, tmp_path, capsys):
+    registry = write_registry(tmp_path, one_uc(frames=[
+        'not a frame',
+        {'parent': None, 'edge': 'entry', 'hop': SERVICE},
+        {'id': 'A', 'parent': None, 'edge': 'entry', 'hop': VIEW}]))
+    ucs, totals = build(extraction, registry)
+    assert [f['id'] for f in frames_of(ucs)] == ['A']
+    assert totals['frames_dropped'] == 2, 'both drops count toward --strict'
+    err = capsys.readouterr().err
+    assert 'dropped [frame must be an object]: not a frame' in err
+    assert 'dropped [frame without an "id"]: ' + SERVICE in err
+
+
+def test_a_worker_frame_inside_a_parent_cycle_is_dropped_with_it(extraction, tmp_path, capsys):
+    """Reopening the depth does not exempt a worker from needing a rooted chain."""
+    registry = write_registry(tmp_path, one_uc(frames=[
+        {'id': 'R', 'parent': None, 'edge': 'entry', 'hop': VIEW},
+        {'id': 'A', 'parent': 'B', 'edge': 'call', 'hop': VIEW},
+        {'id': 'B', 'parent': 'A', 'edge': 'worker', 'hop': SERVICE}]))
+    ucs, totals = build(extraction, registry)
+    assert [f['id'] for f in frames_of(ucs)] == ['R']
+    assert totals['frames_dropped'] == 2
+    assert 'dropped [parent chain of "B" never reaches a root]' in capsys.readouterr().err
 
 
 # ---------------------------------------------------------------------------
@@ -610,7 +667,7 @@ def run_prep_data(out, ucs_path, strict=True):
 def test_strict_is_green_on_the_committed_fixture(tmp_path):
     result = run_prep_data(tmp_path / 'data.json', USECASES)
     assert result.returncode == 0, result.stderr
-    assert 'frames=9' in result.stdout
+    assert ' frames=9 ' in result.stdout
 
 
 def test_strict_exits_three_on_a_hop_with_no_frame(tmp_path):
@@ -641,6 +698,26 @@ def test_strict_exits_three_on_a_parent_cycle(tmp_path):
     result = run_prep_data(tmp_path / 'data.json', registry)
     assert result.returncode == prep_data.STRICT_EXIT
     assert 'strict: 2 frames dropped' in result.stderr
+
+
+@pytest.mark.parametrize('bad', [1, 2.5, 'abc', {}])
+def test_frames_that_is_not_an_array_is_a_fatal_input_error_not_a_traceback(tmp_path, bad):
+    """Data-contract 11: a bad input exits 1 with `--ucs: <message>`, never a traceback."""
+    registry = write_registry(tmp_path, [{'name': 'UC', 'frames': bad}])
+    result = run_prep_data(tmp_path / 'data.json', registry, strict=False)
+    assert result.returncode == 1
+    assert '--ucs: use-case "UC": frames must be an array' in result.stderr
+    assert 'Traceback' not in result.stderr
+
+
+def test_strict_joins_every_reason_it_has(tmp_path):
+    registry = write_registry(tmp_path, one_uc(
+        hops=['orders/models/order.py:Order.mark_paid — no frame cites me'],
+        frames=[{'id': 'A', 'parent': None, 'edge': 'entry', 'hop': VIEW},
+                {'id': 'B', 'parent': 'A', 'edge': 'call', 'hop': 'orders/nowhere.py:Ghost'}]))
+    result = run_prep_data(tmp_path / 'data.json', registry)
+    assert result.returncode == prep_data.STRICT_EXIT
+    assert 'strict: 1 frames dropped, 1 hops without a frame' in result.stderr
 
 
 def test_a_failing_proof_is_a_finding_not_a_gate(tmp_path):
