@@ -1230,7 +1230,7 @@ substituted by the viewer. Keys and texts:
 | `flow.empty` | `Select a use-case or an entry point to see the flow as a tree.` | `Selecione um use-case ou um ponto de entrada para ver o fluxo em árvore.` |
 | `flow.stack.show` | `view stack` | `ver pilha` |
 | `flow.stack.hide` | `view levels` | `ver níveis` |
-| `flow.stack.summary` | `stack: {frames} frames · {hops} hops in the registry · {fails} edges the code does not back` | `pilha: {frames} frames · {hops} hops no registro · {fails} arestas sem respaldo no código` |
+| `flow.stack.summary` | `stack: {frames} frames · {hops} hops in the registry · {fails} edges with no import-graph edge` | `pilha: {frames} frames · {hops} hops no registro · {fails} arestas sem aresta no grafo de imports` |
 | `flow.stack.new_process` | `NEW PROCESS` | `NOVO PROCESSO` |
 | `flow.stack.edge.queue` | `queue` | `fila` |
 | `flow.stack.edge.on_commit` | `on commit` | `no commit` |
@@ -1240,7 +1240,7 @@ substituted by the viewer. Keys and texts:
 | `flow.stack.proof.same_file` | `same file` | `mesmo arquivo` |
 | `flow.stack.proof.import` | `the parent imports the child` | `o pai importa o filho` |
 | `flow.stack.proof.unprovable` | `not provable by the graph ({edge})` | `não provável pelo grafo ({edge})` |
-| `flow.stack.proof.fail` | `not backed by the code` | `sem respaldo no código` |
+| `flow.stack.proof.fail` | `no edge in the import graph` | `sem aresta no grafo de imports` |
 | `flow.stack.mocked` | `mocked data` | `dado mockado` |
 | `detail.title` | `Detail` | `Detalhe` |
 | `detail.empty` | `Select a use-case or an entry point on the left, or click a file. Double-click a file to open its symbol map.` | `Selecione um use-case ou um ponto de entrada à esquerda, ou clique num arquivo. Duplo-clique num arquivo abre o mapa de símbolos dele.` |

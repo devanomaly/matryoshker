@@ -12,7 +12,7 @@ All notable changes to this project are documented in this file.
   checks every edge against the extractor's import graph in five states — `entry`,
   `same_file`, `import`, `unprovable` (an inbound call or an `other` boundary is not
   something an import graph can speak about) and `fail`: a call, a queue publish, a
-  commit hook or a worker pick-up the code does not back. It also enforces the invariant that every hop is a frame, and
+  commit hook or a worker pick-up the import graph does not back. It also enforces the invariant that every hop is a frame, and
   `--strict` now fails on a hop no frame cites or on a frame that had to be dropped.
   In the viewer, such a use-case still opens as levels; a toggle beside the title swaps
   to the stack view, which draws one indented row per frame with its edge, the
