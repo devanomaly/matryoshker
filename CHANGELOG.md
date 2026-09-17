@@ -153,7 +153,7 @@ All notable changes to this project are documented in this file.
   terminates mid-chain is still drawn reconverging; the file-level map overlay cannot
   show a fan whose siblings live in the selector's own file.
 
-- **Existing maps: cluster base positions changed.** Cluster base positions changed, so a saved arrangement (`mtk:<repo>@<commit>:pos`, kept
+- **Existing maps.** Cluster base positions changed, so a saved arrangement (`mtk:<repo>@<commit>:pos`, kept
   per commit) will appear moved on an existing map. Node dragging, the per-use-case
   Packages arrangement, the hidden-folder list and the status drafts are unaffected and
   their `localStorage` keys are unchanged.
