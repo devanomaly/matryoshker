@@ -152,10 +152,10 @@ def unverified_symbol(symbol, record):
 # instead of a flat list of levels. The pipeline resolves the citation exactly like
 # a hop, derives the depth from the parent chain, caps the frame status at the
 # use-case status and checks the edge against the extractor's import graph: a
-# `call` edge holds when the parent's file imports the child's file, or when both
-# are the same file. Every other edge crosses a process, a transaction or a library
-# boundary the import graph cannot see, so it is reported as not provable instead
-# of red. Frames are a derived reading of the code, produced outside this tool: it
+# `call`, `queue` or `on_commit` edge holds when the parent's file imports the
+# child's file, or when both are the same file, and a `worker` frame holds under the
+# same test against its publisher. Only `inbound` and `other` cross a boundary the
+# graph cannot see, so they are reported as not provable instead of red. Frames are a derived reading of the code, produced outside this tool: it
 # resolves, checks and draws them, and ships no generator.
 
 # The seven edge kinds a frame may declare (data-contract 7.4).
@@ -212,12 +212,20 @@ def reaches_root(frame, by_id):
     return True
 
 
+# Edges the import graph has no oracle for: an inbound call comes from outside the
+# code, and `other` is by definition a boundary the author had to name in a note.
+FRAME_UNPROVABLE_EDGES = ('inbound', 'other')
+
+
 def frame_proof(frame, parent, files, edge_set):
     """The proof state of the edge into `frame`, and the sentence explaining it.
 
     Five states: `entry` (no parent), `same_file`, `import` (the graph has the
-    edge), `unprovable` (an edge the import graph cannot speak about) and `fail`,
-    which is reserved for a plain `call` the graph does not back.
+    edge), `unprovable` (an `inbound` or `other` edge, which no oracle here can
+    speak about) and `fail`. A `call`, a `queue` and an `on_commit` edge are all
+    static references to the child in the parent's code, so the graph must back
+    them; a `worker` frame runs the class its publisher named, so it sits in the
+    publisher's file or in one the publisher imports.
     """
     if parent is None:
         return 'entry', 'entry point of the stack'
@@ -225,10 +233,13 @@ def frame_proof(frame, parent, files, edge_set):
         return 'same_file', 'the parent frame is in the same file'
     if (parent['i'], frame['i']) in edge_set:
         return 'import', 'the parent file imports the child file (extractor import graph)'
-    if frame['e'] != 'call':
+    if frame['e'] in FRAME_UNPROVABLE_EDGES:
         return 'unprovable', f"a {frame['e']} edge is not provable by the import graph"
-    return 'fail', (f"{files[parent['i']]['p']} does not import "
-                    f"{files[frame['i']]['p']} in the import graph")
+    parent_path, child_path = files[parent['i']]['p'], files[frame['i']]['p']
+    if frame['e'] == 'worker':
+        return 'fail', (f"the worker frame {child_path} is neither in the publisher's file "
+                        f"{parent_path} nor in a file it imports")
+    return 'fail', f"{parent_path} does not import {child_path} in the import graph"
 
 
 def hops_without_frame(hops, hop_raw, frames, files):

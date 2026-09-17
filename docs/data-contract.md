@@ -827,12 +827,15 @@ like an undeclared hop symbol (§5.4), not stored.
 | `entry` | the frame has no parent |
 | `same_file` | parent and child are the same file |
 | `import` | `[parent.i, child.i]` is an edge of `imports` |
-| `unprovable` | none of the above and `e != "call"` — a queue, a commit hook, a worker hand-off, an inbound call or an `other` boundary is not something an import graph can speak about |
-| `fail` | none of the above and `e == "call"`: a plain call the graph does not back |
+| `unprovable` | none of the above and `e` is `inbound` or `other`: a call from outside the code, or a boundary the author had to name in `edge_note`, is not something the import graph can speak about |
+| `fail` | none of the above: a `call`, `queue` or `on_commit` edge whose parent file does not import the child file, or a `worker` frame that is neither in its publisher's file nor in a file the publisher imports |
 
-`fail` is the only red state, and it is a real finding: the call exists in the story but
-not in the structure — a dynamic dispatch, an import inside a function body, or a frame
-that is simply wrong.
+`fail` is the only red state, and it is a real finding: the edge exists in the story but
+not in the structure — a dynamic dispatch, an import inside a function body, a package
+re-export, a task picked up by name, or a frame that is simply wrong. Publishing to a
+queue and arming a commit hook are held to the same standard as a plain call because
+both name the task class in the publisher's code; only `inbound` and `other` cross a
+boundary no oracle in this pipeline can see.
 
 **The invariant: every hop is a frame; not every frame is a hop.** A hop matches a frame
 when both cite the same file index and the same symbol. The hop may be the coarser of
@@ -1227,7 +1230,7 @@ substituted by the viewer. Keys and texts:
 | `flow.empty` | `Select a use-case or an entry point to see the flow as a tree.` | `Selecione um use-case ou um ponto de entrada para ver o fluxo em árvore.` |
 | `flow.stack.show` | `view stack` | `ver pilha` |
 | `flow.stack.hide` | `view levels` | `ver níveis` |
-| `flow.stack.summary` | `stack: {frames} frames · {hops} hops in the registry · {fails} calls with no import edge` | `pilha: {frames} frames · {hops} hops no registro · {fails} chamadas sem aresta de import` |
+| `flow.stack.summary` | `stack: {frames} frames · {hops} hops in the registry · {fails} edges the code does not back` | `pilha: {frames} frames · {hops} hops no registro · {fails} arestas sem respaldo no código` |
 | `flow.stack.new_process` | `NEW PROCESS` | `NOVO PROCESSO` |
 | `flow.stack.edge.queue` | `queue` | `fila` |
 | `flow.stack.edge.on_commit` | `on commit` | `no commit` |
@@ -1237,7 +1240,7 @@ substituted by the viewer. Keys and texts:
 | `flow.stack.proof.same_file` | `same file` | `mesmo arquivo` |
 | `flow.stack.proof.import` | `the parent imports the child` | `o pai importa o filho` |
 | `flow.stack.proof.unprovable` | `not provable by the graph ({edge})` | `não provável pelo grafo ({edge})` |
-| `flow.stack.proof.fail` | `call with no import edge` | `call sem aresta de import` |
+| `flow.stack.proof.fail` | `not backed by the code` | `sem respaldo no código` |
 | `flow.stack.mocked` | `mocked data` | `dado mockado` |
 | `detail.title` | `Detail` | `Detalhe` |
 | `detail.empty` | `Select a use-case or an entry point on the left, or click a file. Double-click a file to open its symbol map.` | `Selecione um use-case ou um ponto de entrada à esquerda, ou clique num arquivo. Duplo-clique num arquivo abre o mapa de símbolos dele.` |

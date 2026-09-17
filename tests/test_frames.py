@@ -98,7 +98,8 @@ def test_every_fixture_frame_resolves_to_the_file_it_cites(extraction):
     assert cited == ['orders/api/views.py', 'orders/common/mixins.py',
                      'orders/services/checkout.py', 'orders/services/checkout.py',
                      'orders/gateway/payments.py', 'orders/common/queue.py',
-                     'orders/tasks/notify.py', 'orders/models/order.py']
+                     'orders/tasks/notify.py', 'orders/models/order.py',
+                     'orders/api/views.py']
 
 
 def test_a_frame_emits_exactly_the_fourteen_contract_keys(extraction):
@@ -112,7 +113,7 @@ def test_depth_comes_from_the_parent_chain_and_a_worker_reopens_at_zero(extracti
     ucs, _ = build(extraction, USECASES)
     depths = {f['id']: f['d'] for f in frames_of(ucs)}
     assert depths == {'S1': 0, 'S2': 1, 'S3': 1, 'S4': 2, 'S5': 2, 'S6': 2,
-                      'S7': 0, 'S8': 1}, (
+                      'S7': 0, 'S8': 1, 'S9': 0}, (
         'S7 is a worker frame: it reopens the stack at 0 although its parent sits at 2, '
         'and S8 is one call deeper than S7')
 
@@ -126,10 +127,12 @@ def test_the_five_proof_states_all_appear_in_the_fixture(extraction):
                       'S4': 'same_file',    # both in checkout.py
                       'S5': 'import',
                       'S6': 'import',
-                      'S7': 'unprovable',   # worker hand-off: the graph cannot speak
-                      'S8': 'fail'}         # a plain call with no import edge
-    assert {f['id']: f['ok'] for f in frames_of(ucs)}['S8'] is False
-    assert all(f['ok'] for f in frames_of(ucs) if f['id'] != 'S8')
+                      'S7': 'fail',         # worker picked up by job name: nothing static ties it
+                      'S8': 'fail',         # a plain call with no import edge
+                      'S9': 'unprovable'}   # an inbound call: no oracle in the pipeline
+    oks = {f['id']: f['ok'] for f in frames_of(ucs)}
+    assert oks['S7'] is False and oks['S8'] is False
+    assert all(ok for fid, ok in oks.items() if fid not in ('S7', 'S8'))
 
 
 def test_the_failing_frame_names_both_files_in_its_reason(extraction):
@@ -137,6 +140,62 @@ def test_the_failing_frame_names_both_files_in_its_reason(extraction):
     failing = by_id(frames_of(ucs))['S8']
     assert failing['why'] == ('orders/tasks/notify.py does not import '
                               'orders/models/order.py in the import graph')
+
+
+# ---------------------------------------------------------------------------
+# proof by edge kind: a publisher names the task it publishes
+# ---------------------------------------------------------------------------
+
+NOTIFY = 'orders/tasks/notify.py:send_receipt'
+ORDER = 'orders/models/order.py:Order.mark_paid'
+
+
+def proof_of(extraction, tmp_path, edge, parent=NOTIFY, child=ORDER):
+    """Proof of a two-frame stack whose second frame enters through `edge`."""
+    frames = [{'id': 'A', 'parent': None, 'edge': 'entry', 'hop': parent},
+              {'id': 'B', 'parent': 'A', 'edge': edge, 'hop': child}]
+    if edge == 'other':
+        frames[1]['edge_note'] = 'a boundary the graph cannot see'
+    ucs, _ = build(extraction, write_registry(tmp_path, one_uc(frames)))
+    return by_id(frames_of(ucs))['B']
+
+
+@pytest.mark.parametrize('edge', ['queue', 'on_commit'])
+def test_a_queue_or_on_commit_edge_the_publisher_does_not_import_fails(
+        extraction, tmp_path, edge):
+    """Publishing a task or arming a commit hook names the task class in the code."""
+    frame = proof_of(extraction, tmp_path, edge)
+    assert frame['proof'] == 'fail'
+    assert frame['ok'] is False
+    assert 'does not import' in frame['why']
+
+
+def test_a_worker_frame_outside_the_publisher_file_and_its_imports_fails(
+        extraction, tmp_path):
+    frame = proof_of(extraction, tmp_path, 'worker')
+    assert frame['proof'] == 'fail'
+    assert 'worker' in frame['why']
+
+
+def test_a_worker_frame_in_the_publisher_file_is_proven_by_the_file(extraction, tmp_path):
+    frame = proof_of(extraction, tmp_path, 'worker',
+                     parent='orders/services/checkout.py:CheckoutService.place',
+                     child='orders/services/checkout.py:validate_items')
+    assert frame['proof'] == 'same_file'
+
+
+def test_a_queue_edge_the_publisher_imports_is_proven_by_the_graph(extraction, tmp_path):
+    frame = proof_of(extraction, tmp_path, 'queue',
+                     parent='orders/services/checkout.py:CheckoutService.place',
+                     child='orders/common/queue.py:enqueue')
+    assert frame['proof'] == 'import'
+
+
+@pytest.mark.parametrize('edge', ['inbound', 'other'])
+def test_only_inbound_and_other_edges_are_unprovable(extraction, tmp_path, edge):
+    frame = proof_of(extraction, tmp_path, edge)
+    assert frame['proof'] == 'unprovable'
+    assert frame['ok'] is True
 
 
 def test_an_other_edge_keeps_its_note_and_a_mock_reason_keeps_its_prefix(extraction):
@@ -551,7 +610,7 @@ def run_prep_data(out, ucs_path, strict=True):
 def test_strict_is_green_on_the_committed_fixture(tmp_path):
     result = run_prep_data(tmp_path / 'data.json', USECASES)
     assert result.returncode == 0, result.stderr
-    assert 'frames=8' in result.stdout
+    assert 'frames=9' in result.stdout
 
 
 def test_strict_exits_three_on_a_hop_with_no_frame(tmp_path):
@@ -586,12 +645,13 @@ def test_strict_exits_three_on_a_parent_cycle(tmp_path):
 
 def test_a_failing_proof_is_a_finding_not_a_gate(tmp_path):
     """`fail` is drawn red and never affects --strict: the registry often cannot fix
-    it (the committed fixture carries one on purpose), so gating on it would make an
-    honest registry unbuildable (data-contract 7.4, 10.3)."""
+    it (the committed fixture carries two on purpose: a worker picked up by name and a
+    function-body import), so gating on it would make an honest registry unbuildable
+    (data-contract 7.4, 10.3)."""
     result = run_prep_data(tmp_path / 'data.json', USECASES)
     assert result.returncode == 0, result.stderr
     data = read(str(tmp_path / 'data.json'))
-    assert [f['id'] for f in data['ucs'][WITH_FRAMES]['frames'] if f['proof'] == 'fail'] == ['S8']
+    assert [f['id'] for f in data['ucs'][WITH_FRAMES]['frames'] if f['proof'] == 'fail'] == ['S7', 'S8']
 
 
 def test_without_strict_the_same_registry_exits_zero(tmp_path):

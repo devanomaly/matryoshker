@@ -83,6 +83,16 @@
         "registry": "hop 5",
         "status": "outdated",
         "status_reason": "the job imports Order inside the function body, so no import edge backs this call"
+      },
+      {
+        "id": "S9",
+        "parent": "S8",
+        "edge": "inbound",
+        "hop": "orders/api/views.py:CheckoutView",
+        "role": "the customer asks for the order again once it ships: a new request from outside",
+        "registry": "frame only",
+        "status": "inferred",
+        "status_reason": "nothing in the repo ties the shipped order to the next request"
       }
     ],
     "async_legs": ["the receipt job runs in the worker process"],
