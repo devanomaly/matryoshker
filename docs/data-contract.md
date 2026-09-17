@@ -334,6 +334,14 @@ the system called in), `other` (anything else — it must say what in `edge_note
 `worker` and `inbound` reopen the stack at depth 0: execution resumes in another
 process. An unknown edge is coerced to `other` with a warning (§11).
 
+**One parent per frame.** A frame names exactly one caller, so `frames` is a tree, never
+a graph. Two flows converging on one consumer (two producers, one worker) are written by
+duplication: the consumer appears once under each producer, as two frames with the same
+`hop` and different `id`s, and the author marks the second as folded in `registry` so the
+subtree is not repeated. A use-case is one story with one trigger; two producers are
+usually two stories, and the file panel already joins them. A `parents` array would turn
+depth and proof from derived values into choices, and is deliberately not offered.
+
 **An inherited method cites the class that declares it.** A view that inherits
 `record_audit` from a mixin gets a frame citing `common/mixins.py:AuditMixin`, with
 `record_audit` in `role` — the citation must name a symbol the file really declares,
