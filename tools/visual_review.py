@@ -49,6 +49,7 @@ Reference: docs/data-contract.md (the viewer's DOM and data contract).
 """
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -60,7 +61,10 @@ from pathlib import Path
 
 PROG = 'visual_review.py'
 HARNESS = 'tools/visual_review.py'
-SCHEMA = 1
+# Bumped to 2 when by_status gained its `unknown` bucket: a metrics.json written
+# before that has a different key set, and cmd_diff says so instead of showing the
+# added key as if the fixture had changed.
+SCHEMA = 2
 # Written as the very first thing inside --out, so a run that dies half way through
 # (a browser crash, a failed post-condition, Ctrl-C) still leaves a directory the next
 # identical command may reuse. Keying the reuse guard on metrics.json instead would
@@ -70,15 +74,25 @@ MARKER_TEXT = (
     'Written by tools/visual_review.py. The harness removes and recreates this whole\n'
     'directory on every run: keep nothing here.\n')
 
-# The run matrix, the state list and the two JS probes live beside this file so
-# that what the harness *runs* stays readable apart from how it runs it.
-try:
-    from config import RUNS, STATES
-    from probes import I18N_KEYS, RUN_PROBE_JS, STATE_PROBE_JS
-except ImportError:  # invoked as tools/visual_review.py from the repo root
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from config import RUNS, STATES
-    from probes import I18N_KEYS, RUN_PROBE_JS, STATE_PROBE_JS
+# The run matrix, the state list and the two JS probes live beside this file so that
+# what the harness *runs* stays readable apart from how it runs it. They are loaded by
+# PATH, not by name: `config` is generic enough that pipeline/config.py would win the
+# plain import whenever it precedes tools/ on sys.path, and the obvious try/except
+# fallback cannot repair that -- the wrong module is already in sys.modules, so the
+# retry raises again.
+def _load_sibling(name):
+    """Import <name>.py from this file's own directory, whatever sys.path says."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), name + '.py')
+    spec = importlib.util.spec_from_file_location('_visual_review_' + name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_config, _probes = _load_sibling('config'), _load_sibling('probes')
+RUNS, STATES = _config.RUNS, _config.STATES
+I18N_KEYS = _probes.I18N_KEYS
+RUN_PROBE_JS, STATE_PROBE_JS = _probes.RUN_PROBE_JS, _probes.STATE_PROBE_JS
 
 
 # ---------------------------------------------------------------- small helpers
