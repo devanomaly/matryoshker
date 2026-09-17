@@ -1,0 +1,617 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 16,
+  "filesSkipped": [],
+  "analysisOutcomes": {
+    "structure": {
+      "succeeded": 16,
+      "failed": 0
+    },
+    "callGraph": {
+      "succeeded": 16,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "results": [
+    {
+      "path": "orders/__init__.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 8,
+      "nonEmptyLines": 6,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "orders/api/__init__.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 1,
+      "nonEmptyLines": 1,
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "orders/api/views.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 21,
+      "nonEmptyLines": 16,
+      "classes": [
+        {
+          "name": "CheckoutView",
+          "startLine": 11,
+          "endLine": 21,
+          "methods": [
+            "__init__",
+            "post"
+          ],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "CheckoutView",
+          "line": 11,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "__init__",
+          "callee": "CheckoutService",
+          "lineNumber": 15
+        },
+        {
+          "caller": "post",
+          "callee": "self.record_audit",
+          "lineNumber": 19
+        },
+        {
+          "caller": "post",
+          "callee": "self.checkout.place",
+          "lineNumber": 20
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "orders/common/__init__.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 1,
+      "nonEmptyLines": 1,
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "orders/common/hooks.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 18,
+      "nonEmptyLines": 13,
+      "functions": [
+        {
+          "name": "on_commit",
+          "startLine": 6,
+          "endLine": 9,
+          "params": [
+            "callback"
+          ]
+        },
+        {
+          "name": "commit",
+          "startLine": 12,
+          "endLine": 18,
+          "params": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "on_commit",
+          "line": 6,
+          "isDefault": false
+        },
+        {
+          "name": "commit",
+          "line": 12,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "on_commit",
+          "callee": "AFTER_COMMIT.append",
+          "lineNumber": 8
+        },
+        {
+          "caller": "commit",
+          "callee": "list",
+          "lineNumber": 14
+        },
+        {
+          "caller": "commit",
+          "callee": "AFTER_COMMIT.clear",
+          "lineNumber": 15
+        },
+        {
+          "caller": "commit",
+          "callee": "callback",
+          "lineNumber": 17
+        },
+        {
+          "caller": "commit",
+          "callee": "len",
+          "lineNumber": 18
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 2,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "orders/common/mixins.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 12,
+      "nonEmptyLines": 8,
+      "classes": [
+        {
+          "name": "AuditMixin",
+          "startLine": 6,
+          "endLine": 12,
+          "methods": [
+            "record_audit"
+          ],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "AuditMixin",
+          "line": 6,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "record_audit",
+          "callee": "AUDIT_LOG.append",
+          "lineNumber": 11
+        },
+        {
+          "caller": "record_audit",
+          "callee": "len",
+          "lineNumber": 12
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "orders/common/queue.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 21,
+      "nonEmptyLines": 15,
+      "functions": [
+        {
+          "name": "enqueue",
+          "startLine": 11,
+          "endLine": 14,
+          "params": [
+            "job_name",
+            "**payload"
+          ]
+        },
+        {
+          "name": "drain",
+          "startLine": 17,
+          "endLine": 21,
+          "params": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "enqueue",
+          "line": 11,
+          "isDefault": false
+        },
+        {
+          "name": "drain",
+          "line": 17,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "enqueue",
+          "callee": "PENDING.append",
+          "lineNumber": 13
+        },
+        {
+          "caller": "enqueue",
+          "callee": "len",
+          "lineNumber": 14
+        },
+        {
+          "caller": "drain",
+          "callee": "list",
+          "lineNumber": 19
+        },
+        {
+          "caller": "drain",
+          "callee": "PENDING.clear",
+          "lineNumber": 20
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 2,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "orders/gateway/__init__.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 1,
+      "nonEmptyLines": 1,
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "orders/gateway/payments.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 20,
+      "nonEmptyLines": 16,
+      "classes": [
+        {
+          "name": "PaymentGateway",
+          "startLine": 13,
+          "endLine": 20,
+          "methods": [
+            "charge"
+          ],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "PaymentGateway",
+          "line": 13,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "charge",
+          "callee": "payments_sdk.charge",
+          "lineNumber": 20
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "orders/models/__init__.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 4,
+      "nonEmptyLines": 3,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "orders/models/order.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 24,
+      "nonEmptyLines": 18,
+      "classes": [
+        {
+          "name": "Order",
+          "startLine": 4,
+          "endLine": 24,
+          "methods": [
+            "__init__",
+            "total",
+            "mark_paid",
+            "mark_shipped"
+          ],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "Order",
+          "line": 4,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "__init__",
+          "callee": "list",
+          "lineNumber": 9
+        },
+        {
+          "caller": "total",
+          "callee": "sum",
+          "lineNumber": 14
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "orders/services/__init__.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 4,
+      "nonEmptyLines": 3,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "orders/services/checkout.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 33,
+      "nonEmptyLines": 26,
+      "functions": [
+        {
+          "name": "validate_items",
+          "startLine": 10,
+          "endLine": 17,
+          "params": [
+            "items"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "CheckoutService",
+          "startLine": 20,
+          "endLine": 33,
+          "methods": [
+            "__init__",
+            "place"
+          ],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "validate_items",
+          "line": 10,
+          "isDefault": false
+        },
+        {
+          "name": "CheckoutService",
+          "line": 20,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "validate_items",
+          "callee": "ValueError",
+          "lineNumber": 13
+        },
+        {
+          "caller": "validate_items",
+          "callee": "ValueError",
+          "lineNumber": 16
+        },
+        {
+          "caller": "validate_items",
+          "callee": "len",
+          "lineNumber": 17
+        },
+        {
+          "caller": "__init__",
+          "callee": "PaymentGateway",
+          "lineNumber": 24
+        },
+        {
+          "caller": "place",
+          "callee": "validate_items",
+          "lineNumber": 28
+        },
+        {
+          "caller": "place",
+          "callee": "Order",
+          "lineNumber": 29
+        },
+        {
+          "caller": "place",
+          "callee": "self.gateway.charge",
+          "lineNumber": 30
+        },
+        {
+          "caller": "place",
+          "callee": "order.total",
+          "lineNumber": 30
+        },
+        {
+          "caller": "place",
+          "callee": "on_commit",
+          "lineNumber": 31
+        },
+        {
+          "caller": "place",
+          "callee": "enqueue",
+          "lineNumber": 32
+        }
+      ],
+      "metrics": {
+        "importCount": 4,
+        "exportCount": 2,
+        "functionCount": 1,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "orders/tasks/__init__.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 1,
+      "nonEmptyLines": 1,
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "orders/tasks/notify.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 15,
+      "nonEmptyLines": 11,
+      "functions": [
+        {
+          "name": "send_receipt",
+          "startLine": 4,
+          "endLine": 15,
+          "params": [
+            "order_id"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "send_receipt",
+          "line": 4,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "send_receipt",
+          "callee": "Order",
+          "lineNumber": 13
+        },
+        {
+          "caller": "send_receipt",
+          "callee": "order.mark_shipped",
+          "lineNumber": 14
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "orders/tasks/worker.py",
+      "language": "python",
+      "fileCategory": "code",
+      "totalLines": 21,
+      "nonEmptyLines": 16,
+      "functions": [
+        {
+          "name": "register",
+          "startLine": 7,
+          "endLine": 10,
+          "params": [
+            "job_name",
+            "function"
+          ]
+        },
+        {
+          "name": "run_pending",
+          "startLine": 13,
+          "endLine": 21,
+          "params": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "register",
+          "line": 7,
+          "isDefault": false
+        },
+        {
+          "name": "run_pending",
+          "line": 13,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "run_pending",
+          "callee": "drain",
+          "lineNumber": 16
+        },
+        {
+          "caller": "run_pending",
+          "callee": "REGISTRY.get",
+          "lineNumber": 17
+        },
+        {
+          "caller": "run_pending",
+          "callee": "function",
+          "lineNumber": 19
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 2,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    }
+  ]
+}

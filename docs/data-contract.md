@@ -226,6 +226,7 @@ applied via pull request.
 | `goal` | string | `""` | yes → `ucs[].goal` |
 | `entry_points` | array of entry-point citations (strings, section 5.2) | `[]` | yes → merged into `entry_points` (section 6) |
 | `hops` | array of hop citations (strings, section 5.1), in execution order | `[]` | yes → `ucs[].hops` |
+| `frames` | array of frame objects (4.4): the call stack behind the hops | absent | yes → `ucs[].frames` (7.4), **optional**: a registry without it produces exactly the bytes it always did |
 | `rules` | array of strings (business rules touched) | `[]` | yes → `ucs[].rules` |
 | `seam_crossing` | boolean | `false` | yes → `ucs[].seam` |
 | `status` | status value (4.2) | `"inferred"` | yes → `ucs[].status` |
@@ -299,6 +300,89 @@ viewer only ever contain canonical values.
 The two `branch:` hops are siblings, not a sequence: the handler picks one validator by
 ISBN length and both reconverge on `BookRepository.add`. The viewer draws them as level
 `3a` / `3b` side by side, with `add` at level 4 (§5.1).
+
+### 4.4 `frames` — the call stack behind the hops (optional)
+
+`hops` is the story of a flow: the steps worth telling, in execution order, flat.
+`frames` is the same flow as the call stack it really is — every step the story skipped,
+each one pointing at the frame that called it. The two coexist: a use-case with `frames`
+keeps its hops and its levels view, and gains a second reading of the same flow.
+
+A frame is an object, not a string:
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `id` | string, non-empty, unique in the use-case | **required** | how other frames name this one |
+| `parent` | string (an `id`) or `null` | `null` | the frame that called this one; `null` opens a stack |
+| `edge` | one of the seven kinds below | `"call"` | how execution got here from `parent` |
+| `edge_note` | string | `""` | **required with `edge: "other"`**: what the boundary is |
+| `hop` | hop citation, the grammar of §5.1 | **required** | which file and symbol this frame is |
+| `role` | string | `""` | what the frame does, truncated at `ROLE_MAX_LEN` |
+| `registry` | string | `""` | free text tying the frame back to the flat registry (`hop 3`, `frame only`, …). Never parsed: the viewer prints it verbatim |
+| `status` | status value (4.2), aliases accepted | the use-case's status | the epistemic status of **this frame** |
+| `status_reason` | string | `""` | why. The prefix `mock:` means "executed with mocked data" — it is a note, not a sixth status |
+| any other key | any | — | kept in the file, ignored by the pipeline |
+
+`frames` must be an array when present; any other type is a fatal input error (§11,
+`--ucs: use-case "<name>": frames must be an array of frame objects`). A `null` or an
+absent key means the use-case declares no frames.
+
+**Edge kinds.** `entry` (nothing called it), `call` (an ordinary synchronous call),
+`queue` (published to a queue), `on_commit` (armed to run when the unit of work
+commits), `worker` (a worker process picked the job up), `inbound` (something outside
+the system called in), `other` (anything else — it must say what in `edge_note`).
+`worker` and `inbound` reopen the stack at depth 0: execution resumes in another
+process. An unknown edge is coerced to `other` with a warning (§11).
+
+**One parent per frame.** A frame names exactly one caller, so `frames` is a tree, never
+a graph. Two flows converging on one consumer (two producers, one worker) are written by
+duplication: the consumer appears once under each producer, as two frames with the same
+`hop` and different `id`s, and the author marks the second as folded in `registry` so the
+subtree is not repeated. A use-case is one story with one trigger; two producers are
+usually two stories, and the file panel already joins them. A `parents` array would turn
+depth and proof from derived values into choices, and is deliberately not offered.
+
+**An inherited method cites the class that declares it.** A view that inherits
+`record_audit` from a mixin gets a frame citing `common/mixins.py:AuditMixin`, with
+`record_audit` in `role` — the citation must name a symbol the file really declares,
+or §5.4 warns about it. When the declaring class lives outside the repository (a
+framework base class), there is no file to cite: the frame cites the inheriting class
+alone, again with the method in `role`.
+
+**No line numbers.** A citation is `path:Symbol`, never `path:120`. A line moves with
+the next edit; the evidence for an edge (which line of the parent calls the child)
+belongs in a commit-dated artifact outside the registry, not in a file meant to survive
+refactors.
+
+**Frames are a derived reading of the code, not a second thing to curate.** They are
+produced outside this repository — by an agent or a script reading the code — and this
+tool ships no generator: it resolves, checks and draws what it is given. They go stale
+the moment the code moves, so re-produce a use-case's frames when a file one of its hops
+cites changes. `--strict` (§10.3) catches part of that staleness and only part: it fails
+on a frame whose **file** is gone (dropped), on a frame detached from its stack, and on a
+hop no frame cites. It does **not** fail on a renamed symbol (an `unverified symbol`
+warning, §5.4) nor on a `fail` proof (§7.4), which is a finding to read, not a gate.
+Nothing in the pipeline or the viewer holds a list of file names, symbol names or flows
+that a human has to keep current.
+
+**Three rules are warned about, never enforced**: an `other` edge without an
+`edge_note`, a line reference in a frame citation, and an `entry` edge on a frame that
+has a parent. The frame is kept and drawn; the warning (§11) is for the author.
+
+```json
+{
+  "name": "Customer checks a basket out",
+  "hops": ["orders/api/views.py:CheckoutView — audits the request and delegates"],
+  "frames": [
+    { "id": "S1", "parent": null, "edge": "entry",
+      "hop": "orders/api/views.py:CheckoutView",
+      "role": "post — audits the request and delegates", "registry": "hop 1" },
+    { "id": "S2", "parent": "S1", "edge": "call",
+      "hop": "orders/common/mixins.py:AuditMixin",
+      "role": "record_audit — inherited by CheckoutView", "registry": "frame only" }
+  ]
+}
+```
 
 ---
 
@@ -445,8 +529,8 @@ on the map, so authors must fix it in the registry.
 
 ### 5.5 Reporting (stderr) and totals
 
-Per use-case, printed only when the use-case has at least one dropped citation or one
-unverified symbol:
+Per use-case, printed only when the use-case has at least one dropped citation, one
+unverified symbol or, in its `frames` block (§7.4), one hop that no frame cites:
 
 ```
 UC <name>: <resolved>/<total> hops resolved
@@ -454,12 +538,17 @@ UC <name>: <resolved>/<total> hops resolved
   unverified symbol [<symbol> not declared in <path>]: <raw hop>
 UC <name>: <resolved>/<total> entry points resolved
   dropped [<reason>]: <raw entry point>
+UC <name>: <resolved>/<total> frames resolved
+  dropped [<reason>]: <raw frame citation>
+  unverified symbol [<symbol> not declared in <path>]: <raw frame citation>
+  hop without frame [no frame cites <path>[:<symbol>]]: <raw hop>
 ```
 
 Then, only when something was dropped:
 
 ```
 total: <resolved>/<total> hops resolved (<dropped> dropped in <n> use-cases)
+total: <resolved>/<total> frames resolved (<dropped> dropped in <n> use-cases)
 total: <resolved>/<total> entry points resolved (<dropped> dropped in <n> use-cases)
 ```
 
@@ -709,6 +798,94 @@ shows in the panel with `Hops (0)`). The viewer derives `ucByFile` (reverse inde
 file → use-cases, the same join as the overlay, so both directions agree by
 construction) and the `ucCount` centrality.
 
+#### `ucs[].frames` — the resolved call stack
+
+Present **only** when the registry entry declared `frames` (4.4) and at least one of
+them resolved. A use-case without it is byte for byte what it was before frames
+existed, and every consumer that ignores the key keeps working.
+
+```
+{ "id": "S3", "parent": "S1", "e": "call", "i": 12, "s": "CheckoutService.place",
+  "r": "the central rule of the flow", "d": 1, "reg": "hop 2", "st": "inferred",
+  "en": "", "sr": "", "proof": "import",
+  "why": "the parent file imports the child file (extractor import graph)", "ok": true }
+```
+
+| Key | Type | Source |
+|---|---|---|
+| `id` | string | registry `id` |
+| `parent` | string or `null` | registry `parent` (`""` becomes `null`) |
+| `e` | edge kind (4.4) | registry `edge`; an unknown one is `other` plus a warning |
+| `i` | integer | file index of the resolved citation |
+| `s` | string | symbol of the citation, `""` when it had none |
+| `r` | string | registry `role`, truncated at `ROLE_MAX_LEN` |
+| `d` | integer | depth, derived: `0` for a root and for `worker`/`inbound`, else `parent.d + 1` |
+| `reg` | string | registry `registry`, verbatim |
+| `st` | canonical status | registry `status` (default: the use-case's), aliases mapped, then capped at the use-case status |
+| `en` | string | registry `edge_note` |
+| `sr` | string | registry `status_reason` |
+| `proof` | `entry` \| `same_file` \| `import` \| `unprovable` \| `fail` | derived (below) |
+| `why` | string | the sentence behind `proof`, shown on hover |
+| `ok` | boolean | `proof != "fail"`, for a consumer that only wants a flag |
+
+Those fourteen keys are the whole record, in that order. There is no evidence field and
+no symbol-verification flag: an undeclared frame symbol is reported on stderr exactly
+like an undeclared hop symbol (§5.4), not stored.
+
+**The five proof states**, evaluated in this order against the import graph of §7.3:
+
+| `proof` | When |
+|---|---|
+| `entry` | the frame has no parent |
+| `same_file` | parent and child are the same file |
+| `import` | `[parent.i, child.i]` is an edge of `imports` |
+| `unprovable` | none of the above and `e` is `inbound` or `other`: a call from outside the code, or a boundary the author had to name in `edge_note`, is not something the import graph can speak about |
+| `fail` | none of the above: a `call`, `queue` or `on_commit` edge whose parent file does not import the child file, or a `worker` frame that is neither in its publisher's file nor in a file the publisher imports |
+
+`fail` is the only red state, and it is a real finding: the edge exists in the story but
+not in the structure — a dynamic dispatch, an import inside a function body, a package
+re-export, a task picked up by name, or a frame that is simply wrong. Publishing to a
+queue and arming a commit hook are held to the same standard as a plain call because
+both name the task class in the publisher's code; only `inbound` and `other` cross a
+boundary no oracle in this pipeline can see.
+
+**The invariant: every hop is a frame; not every frame is a hop.** A hop matches a frame
+when both cite the same file index and the same symbol. The hop may be the coarser of
+the two — a story names the class, a stack names the method: a hop citing `A` matches a
+frame citing `A.b`, and a hop whose citation had no symbol matches any frame of that
+file. The converse does not hold: a hop citing `A.b` is not matched by a frame citing
+only `A`. A hop no frame cites is reported on stderr
+(§5.5 shape, §11 line kinds) and, under `--strict`, exits 3 like a dropped citation. The
+converse is not checked: a frame the flat registry never mentioned is the point of the
+feature. The check applies only to use-cases that carry `frames`.
+
+**A frame status never rises above its use-case's.** `STATUSES` runs from the strongest
+claim to the weakest, and the emitted `st` is whichever of the two sits later in it. A
+frame with no status inherits the use-case's. This makes the flat registry the ceiling
+of everything derived from it: no regeneration can promote a use-case by promoting its
+parts.
+
+**What is dropped.** A frame whose citation does not resolve is dropped with the reason
+of §5.3, like a hop. A frame whose `parent` is not among the kept frames is dropped too,
+cascading through its subtree, with the reason `parent "<id>" not in frames` — a frame
+detached from its stack would otherwise be silently redrawn as a root. A frame whose
+parent chain never reaches a root — a parent cycle, or a frame that names itself — is
+dropped with the reason `parent chain of "<id>" never reaches a root`: such a stack has
+no top to draw from, and `d` is undefined for it. An item of `frames` that is not an
+object is dropped (`frame must be an object`), and so is a frame without an `id`
+(`frame without an "id"`); a repeated `id` keeps the first and warns. Every drop counts
+toward `--strict`. `worker` and `inbound` restart the depth at 0 but are still frames of
+their parent's stack: they need a parent chain that reaches a root like any other.
+
+**Frames do not feed the reverse index.** `ucByFile` — and with it *Use-cases passing
+here* and the use-case count of the Stars ranking (13.6) — is joined on `hops[].i` alone.
+Hops are what an author chose to tell; frames are derived from the code, and counting
+them would turn a curated signal into a measure of how deep a call stack happens to be. A
+file that appears only as a frame is therefore reachable from the stack view and from the
+detail panel's frame list, but clicking it on the map does not list the use-case under
+*Use-cases passing here*. The file panel's link back to the active use-case (13.5) is
+what keeps that click from being a dead end.
+
 ---
 
 ## 8. `extra.json` — output of `prep_extra.py` — and injection
@@ -854,10 +1031,11 @@ python pipeline/prep_data.py --es <es-output.json> --imports <im-output.json> \
 | `--config` | yes | repo config (section 3) |
 | `--ucs` | no | use-case registry; without it `ucs = []` |
 | `--out` | yes | `data.json` to write (parent directory must exist) |
-| `--strict` | no | exit 3 if any hop was dropped |
+| `--strict` | no | exit 3 if any hop or frame was dropped, or any hop has no frame |
 
-stdout: `files=N imports=N ucs=N hops=N -> <out> (NKB)` where `hops` counts resolved
-hops only. stderr: section 5.5.
+stdout: `files=N imports=N ucs=N hops=N [frames=N ]-> <out> (NKB)` where `hops` counts
+resolved hops only and `frames`, present only when a registry declared frames (4.4),
+counts resolved frames only. stderr: section 5.5.
 
 ### 10.4 `pipeline/prep_extra.py`
 
@@ -939,15 +1117,24 @@ written to `--out` unless all four steps succeed.
 | 0 | success — **even when hops or entry points were dropped** | all |
 | 1 | fatal input/usage error (`<flag>: <message>`), missing placeholder, index mismatch, unknown parser, build orchestration failure | all |
 | 2 | command-line syntax error (argparse) | all Python scripts |
-| 3 | `--strict` and at least one citation/route was dropped (`strict: N citations dropped`) | `prep_data`, `prep_extra`, `build` |
+| 3 | `--strict` and at least one citation/route was dropped (`strict: N citations dropped`), or, in `prep_data`, a frame was dropped or a hop has no frame (`strict: N frames dropped`, `strict: N hops without a frame`, joined by `, ` when more than one applies) | `prep_data`, `prep_extra`, `build` |
 | other | propagated from a failed step | `build.py` |
 
 stderr line kinds, each on its own line, no other prefixes:
 
 - `warning: <message>` — deprecated key, unknown key/option, unknown status or lang,
-  undeclared category, missing parser files;
-- `UC <name>: k/n hops resolved` / `UC <name>: k/n entry points resolved` followed by
-  indented `  dropped [<reason>]: <raw>` and `  unverified symbol [...]: <raw>` lines;
+  undeclared category, missing parser files, and, for frames (4.4),
+  `warning: UC <name>: frame <id>: unknown edge "<x>", using "other"`,
+  `warning: UC <name>: duplicate frame id "<id>", keeping the first`,
+  `warning: UC <name>: frame <id>: edge "other" without an edge_note`,
+  `warning: UC <name>: frame <id>: edge "entry" on a frame that has a parent` and
+  `warning: UC <name>: frame <id>: line reference "<n>" in a frame citation`;
+- `UC <name>: k/n hops resolved` / `UC <name>: k/n entry points resolved` /
+  `UC <name>: k/n frames resolved` followed by indented `  dropped [<reason>]: <raw>`
+  and `  unverified symbol [...]: <raw>` lines;
+- inside the `frames` block only, the indented line kind
+  `  hop without frame [no frame cites <path>[:<symbol>]]: <raw hop>` — one per hop of
+  the use-case that no frame cites (the invariant of 7.4);
 - `parser <name> (<file>): dropped [<reason>]: <what>`;
 - `total: ...` summaries and the `entry points: ...` breakdown;
 - `build.py: step k/4 <name>` and `build.py: ... failed (exit N)`;
@@ -1053,6 +1240,20 @@ substituted by the viewer. Keys and texts:
 | `file.calls_other` | `calls into other files` | `chama em outros arquivos` |
 | `flow.call_tree_title` | `{label} — call tree (depth {d})` | `{label} — árvore de chamadas (prof. {d})` |
 | `flow.empty` | `Select a use-case or an entry point to see the flow as a tree.` | `Selecione um use-case ou um ponto de entrada para ver o fluxo em árvore.` |
+| `flow.stack.show` | `view stack` | `ver pilha` |
+| `flow.stack.hide` | `view levels` | `ver níveis` |
+| `flow.stack.summary` | `stack: {frames} frames · {hops} hops in the registry · {fails} edges with no import-graph edge` | `pilha: {frames} frames · {hops} hops no registro · {fails} arestas sem aresta no grafo de imports` |
+| `flow.stack.new_process` | `NEW PROCESS` | `NOVO PROCESSO` |
+| `flow.stack.edge.queue` | `queue` | `fila` |
+| `flow.stack.edge.on_commit` | `on commit` | `no commit` |
+| `flow.stack.edge.worker` | `worker` | `worker` |
+| `flow.stack.edge.inbound` | `inbound` | `entrada externa` |
+| `flow.stack.proof.entry` | `entry` | `entrada` |
+| `flow.stack.proof.same_file` | `same file` | `mesmo arquivo` |
+| `flow.stack.proof.import` | `the parent imports the child` | `o pai importa o filho` |
+| `flow.stack.proof.unprovable` | `not provable by the graph ({edge})` | `não provável pelo grafo ({edge})` |
+| `flow.stack.proof.fail` | `no edge in the import graph` | `sem aresta no grafo de imports` |
+| `flow.stack.mocked` | `mocked data` | `dado mockado` |
 | `detail.title` | `Detail` | `Detalhe` |
 | `detail.empty` | `Select a use-case or an entry point on the left, or click a file. Double-click a file to open its symbol map.` | `Selecione um use-case ou um ponto de entrada à esquerda, ou clique num arquivo. Duplo-clique num arquivo abre o mapa de símbolos dele.` |
 | `detail.empty_short` | `Select a use-case or an entry point on the left, or click a file.` | `Selecione um use-case ou um ponto de entrada à esquerda, ou clique num arquivo.` |
@@ -1079,6 +1280,7 @@ substituted by the viewer. Keys and texts:
 | `detail.status_title` | `local draft; make it official in the repo via PR (export local statuses)` | `rascunho local; oficialize no repo via PR (exportar status locais)` |
 | `detail.local` | `· local` | `· local` |
 | `detail.hops` | `Hops ({n})` | `Hops ({n})` |
+| `detail.frames` | `Stack ({n})` | `Pilha ({n})` |
 | `detail.rules` | `Rules involved` | `Regras envolvidas` |
 | `detail.entry_point` | `Entry point` | `Ponto de entrada` |
 | `export.title` | `Export statuses` | `Exportar status` |
@@ -1177,8 +1379,33 @@ source follows whatever is left.
   The role prefix is dropped from the drawn label — the token up to the first `:` — and
   the pipeline's `k` decides whether there is one to drop, so the vocabulary is not
   duplicated in the viewer.
+- A use-case that carries `frames` (7.4) can be read two ways, and **levels is the
+  default**: a page load always starts in levels, with a toggle (`flow.stack.show`)
+  beside the title of any use-case that has frames. The toggle swaps to the stack view
+  and back (`flow.stack.hide`); nothing else in the viewer changes, and a use-case
+  without frames never shows the control. The reading chosen last is kept for the rest
+  of the session — selecting another use-case with frames opens it in that reading —
+  and is not persisted: the stack is only ever reached through the toggle.
+- The **stack view** draws one row per frame, indented by `d`, each connected to its
+  parent: a `call` edge by a plain L-shaped connector, every other kind dashed in the
+  accent with its kind named inside the node (an `other` edge shows its `en` note
+  instead). A `worker` or `inbound` frame opens a new stack under a dashed rule labelled
+  `flow.stack.new_process`. Right of each row: `reg` verbatim — free registry text the
+  viewer never parses — and the `proof` state with `why` on hover, `fail` being the only
+  one drawn in `--crit`. A `sr` that starts with `mock:` adds `flow.stack.mocked`.
+- The stack is fitted with `fitTop()` — width only, never above 1:1, top pinned under
+  the crumbs — because a call stack is read top-down, not squeezed into the viewport.
+  Every refit goes through it while the stack is drawn, a window resize included.
 - The **detail panel** is unaffected: it lists the registry's own lines in JSON order,
-  prefix visible, because that is what an author needs when correcting the file.
+  prefix visible, because that is what an author needs when correcting the file. With
+  frames it adds a second, indented list under `detail.frames`, one row per frame with
+  its edge glyph and its `reg` text.
+- Clicking a node of the Flow scene (a level box or a stack row) opens that file's panel
+  in place of the use-case's. While a use-case is active, the file panel opens with
+  `detail.usecase` and a link carrying the use-case's name; one click repaints the
+  use-case panel, and in the Flow scene the drawing, the stack toggle and the zoom stay as
+  they were. From the Symbols scene the same link returns to Packages first, as selecting
+  a use-case always has.
 - The map overlay applies the same level grouping, but it is file-level and dedups
   consecutive hops of the same file, so a fan whose siblings share the selector's file
   does not appear there (§5.1).
@@ -1204,7 +1431,8 @@ data must always produce the same map, because the drag offsets saved in
   available as an SVG `<title>`: on the label in Packages, and on the box group in
   Context, where it is emitted only when the name was actually clipped, so an untruncated
   box carries no native tooltip repeating the label it already shows.
-- `fit()` and `centerOn()` are view operations, not layout: they may read the viewport.
+- `fit()`, `fitTop()` and `centerOn()` are view operations, not layout: they may read
+  the viewport.
 
 ### 13.6 Stars panel
 
@@ -1280,3 +1508,4 @@ defaulting `route` to `null` and `ucs` to `[]`.
 | Date | Change |
 |---|---|
 | 2026-09 | Entry points: `route` and `ucs` added (6.1); the merge keeps every source's contribution instead of discarding all but the first, so a declared label survives a route parser (6.2); the sort gained `route` as its first text key; the panel shows the route and the declaring use-cases (13.3) with the new UI strings `ep.route` and `ep.ucs` (13.2). |
+| 2026-09 | Frames: a use-case may declare the call stack behind its hops (4.4), emitted as the optional `ucs[].frames` (7.4) with a derived depth, a status capped at the use-case's and an edge checked against the import graph in five proof states. A registry without `frames` produces the same `data.json` bytes as before. `--strict` also fails on a dropped frame and on a hop no frame cites (10.3, 11); the Flow scene gains an opt-in stack view behind a toggle (13.5) with the `flow.stack.*` and `detail.frames` UI strings (13.2). |

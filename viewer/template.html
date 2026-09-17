@@ -331,6 +331,20 @@ const UI_STRINGS = {
     'file.calls_other': 'calls into other files',
     'flow.call_tree_title': '{label} — call tree (depth {d})',
     'flow.empty': 'Select a use-case or an entry point to see the flow as a tree.',
+    'flow.stack.show': 'view stack',
+    'flow.stack.hide': 'view levels',
+    'flow.stack.summary': 'stack: {frames} frames · {hops} hops in the registry · {fails} edges with no import-graph edge',
+    'flow.stack.new_process': 'NEW PROCESS',
+    'flow.stack.edge.queue': 'queue',
+    'flow.stack.edge.on_commit': 'on commit',
+    'flow.stack.edge.worker': 'worker',
+    'flow.stack.edge.inbound': 'inbound',
+    'flow.stack.proof.entry': 'entry',
+    'flow.stack.proof.same_file': 'same file',
+    'flow.stack.proof.import': 'the parent imports the child',
+    'flow.stack.proof.unprovable': 'not provable by the graph ({edge})',
+    'flow.stack.proof.fail': 'no edge in the import graph',
+    'flow.stack.mocked': 'mocked data',
     'detail.title': 'Detail',
     'detail.empty': 'Select a use-case or an entry point on the left, or click a file. Double-click a file to open its symbol map.',
     'detail.empty_short': 'Select a use-case or an entry point on the left, or click a file.',
@@ -357,6 +371,7 @@ const UI_STRINGS = {
     'detail.status_title': 'local draft; make it official in the repo via PR (export local statuses)',
     'detail.local': '· local',
     'detail.hops': 'Hops ({n})',
+    'detail.frames': 'Stack ({n})',
     'detail.rules': 'Rules involved',
     'detail.entry_point': 'Entry point',
     'export.title': 'Export statuses',
@@ -410,6 +425,20 @@ const UI_STRINGS = {
     'file.calls_other': 'chama em outros arquivos',
     'flow.call_tree_title': '{label} — árvore de chamadas (prof. {d})',
     'flow.empty': 'Selecione um use-case ou um ponto de entrada para ver o fluxo em árvore.',
+    'flow.stack.show': 'ver pilha',
+    'flow.stack.hide': 'ver níveis',
+    'flow.stack.summary': 'pilha: {frames} frames · {hops} hops no registro · {fails} arestas sem aresta no grafo de imports',
+    'flow.stack.new_process': 'NOVO PROCESSO',
+    'flow.stack.edge.queue': 'fila',
+    'flow.stack.edge.on_commit': 'no commit',
+    'flow.stack.edge.worker': 'worker',
+    'flow.stack.edge.inbound': 'entrada externa',
+    'flow.stack.proof.entry': 'entrada',
+    'flow.stack.proof.same_file': 'mesmo arquivo',
+    'flow.stack.proof.import': 'o pai importa o filho',
+    'flow.stack.proof.unprovable': 'não provável pelo grafo ({edge})',
+    'flow.stack.proof.fail': 'sem aresta no grafo de imports',
+    'flow.stack.mocked': 'dado mockado',
     'detail.title': 'Detalhe',
     'detail.empty': 'Selecione um use-case ou um ponto de entrada à esquerda, ou clique num arquivo. Duplo-clique num arquivo abre o mapa de símbolos dele.',
     'detail.empty_short': 'Selecione um use-case ou um ponto de entrada à esquerda, ou clique num arquivo.',
@@ -436,6 +465,7 @@ const UI_STRINGS = {
     'detail.status_title': 'rascunho local; oficialize no repo via PR (exportar status locais)',
     'detail.local': '· local',
     'detail.hops': 'Hops ({n})',
+    'detail.frames': 'Pilha ({n})',
     'detail.rules': 'Regras envolvidas',
     'detail.entry_point': 'Ponto de entrada',
     'export.title': 'Exportar status',
@@ -496,7 +526,9 @@ for (const [s0,t0] of IMP){
   (inAdj.get(t0) ?? inAdj.set(t0,[]).get(t0)).push(s0);
 }
 
-// reverse index file -> use-cases (join on hops[].i; precision = file level)
+// reverse index file -> use-cases (join on hops[].i; precision = file level).
+// Hops only, on purpose: frames are derived, and would inflate a curated signal
+// (data-contract 7.4). tests/test_viewer.py pins it.
 const ucByFile = new Map();
 UCS.forEach((u,j)=>{
   for (const h of u.hops){
@@ -532,6 +564,7 @@ let activeEp = -1;          // index of the active entry point (lens in Context,
 let treeRoot = null;        // {i, symbol|null}: call tree opened from the symbols scene
 let activeUC = -1;          // index of the active use-case
 let flowPick = null;        // 'uc' | 'ep' | 'tree' | null: selection the Flow scene draws
+let flowStack = false;      // a use-case with `frames` opens as levels; the stack view is opt-in via the toggle
 let flowDrawn = '';         // signature of the Flow drawing on screen (refit when it changes)
 let selected = -1;          // packages scene: selected file
 let showMuted = false;      // show muted categories (tests, typically)
@@ -1051,10 +1084,116 @@ function hopRoleText(h){
 function hopLabel(level, k){
   return level.fan ? level.n + String.fromCharCode(97 + k) : level.n + '.';
 }
+// --- stack view (data-contract 7.4 frames) ---
+// One row per frame; x = depth. A `call` edge is an L-shaped connector from the
+// parent; every other edge leaves the synchronous stack and is drawn dashed in the
+// accent, with the edge kind named inside the node. A `worker` or an `inbound`
+// frame reopens the stack at depth 0, under a dashed rule. Right of each node: what
+// the flat registry says about the frame (free text, never parsed here) and the
+// pipeline's edge check, with the full reason on hover.
+// Deterministic by contract: every width comes from a character count, never from a
+// measurement (13.6). Testable by contract: tests/test_viewer_stack.py extracts this
+// block between the sentinels and runs it under bare node with stubs for F, t, esc,
+// baseName and CATCOLOR — no other global, no DOM.
+const STACK_EDGE = {queue: 'flow.stack.edge.queue', on_commit: 'flow.stack.edge.on_commit',
+                    worker: 'flow.stack.edge.worker', inbound: 'flow.stack.edge.inbound'};
+const STACK_GLYPH = {entry:'•', call:'├', queue:'~', on_commit:'⏎',
+                     worker:'▸', inbound:'▸', other:'≡'};
+// proof state -> [mark, UI string key, color token]. `fail` is the only red one: it
+// means a static edge (call, queue, on_commit, worker) the import graph does not back (data-contract 7.4).
+const STACK_PROOF = {entry:      ['✓', 'flow.stack.proof.entry', 'var(--ink-3)'],
+                     same_file:  ['✓', 'flow.stack.proof.same_file', 'var(--ink-3)'],
+                     import:     ['✓', 'flow.stack.proof.import', 'var(--ink-3)'],
+                     unprovable: ['○', 'flow.stack.proof.unprovable', 'var(--accent)'],
+                     fail:       ['✗', 'flow.stack.proof.fail', 'var(--crit)']};
+const STACK = {ROW: 46, IND: 28, W: 520, H: 34, TAGX: 12, TAGW: 300, CHARW: 7.6,
+               EDGECAP: 34, RULE: 16, TOGGLEW: 92, TOGGLEH: 22};
+// 'file.py : Symbol' when it fits, else the symbol alone, else a clipped string —
+// never longer than `cap` characters.
+function fitLabel(base, sym, cap){
+  const full = sym ? base + ' : ' + sym : base;
+  if (full.length <= cap) return full;
+  if (sym && sym.length <= cap) return sym;             // drop the file, keep the symbol whole
+  return (sym || base).slice(0, cap - 1) + '…';
+}
+function clip(text, cap){
+  return text.length > cap ? text.slice(0, cap - 1) + '…' : text;
+}
+function stackSvg(u){
+  const fr = u.frames, S = STACK;
+  const byId = {}, pos = {};
+  for (const f of fr) byId[f.id] = f;
+  let maxD = 0;
+  for (const f of fr) if (f.d > maxD) maxD = f.d;
+  const width = maxD * S.IND + S.W + S.TAGX + S.TAGW;
+  // rows first: an edge needs both ends placed, whatever order the frames arrive in
+  let y = 0, rules = '';
+  for (const f of fr){
+    if (f.e === 'worker' || f.e === 'inbound'){
+      y += S.RULE;
+      rules += `<path d="M0,${y} H${width}" stroke="var(--accent)" stroke-width="1.2" stroke-dasharray="6 5" opacity=".8"/>`
+        + `<text class="flowt2" x="0" y="${y - 5}" style="fill:var(--accent);font-weight:700;letter-spacing:.06em">${esc(t('flow.stack.new_process'))}</text>`;
+      y += S.RULE;
+    }
+    pos[f.id] = {x: f.d * S.IND, y};
+    y += S.ROW;
+  }
+  let edges = '';
+  for (const f of fr){
+    const parent = f.parent ? byId[f.parent] : null;
+    if (!parent) continue;
+    const a = pos[parent.id], b = pos[f.id];
+    const px = a.x + 12, py = a.y + S.H, cy = b.y + S.H / 2;
+    const reopen = f.e === 'worker' || f.e === 'inbound';
+    const dashed = f.e !== 'call';
+    const d = reopen
+      ? `M${px},${py} C${px},${py + 24} ${b.x + 60},${b.y - 28} ${b.x + 60},${b.y}`
+      : `M${px},${py} L${px},${cy} L${b.x},${cy}`;
+    edges += `<path class="calledge" d="${d}" style="opacity:.8;${dashed ? 'stroke:var(--accent);stroke-width:1.6;' : ''}"`
+      + `${dashed ? ' stroke-dasharray="5 4"' : ''}${reopen ? ' marker-end="url(#arra)"' : ''}/>`;
+  }
+  let nodes = '', fails = 0;
+  for (const f of fr){
+    const file = F[f.i], p = pos[f.id];
+    if (f.proof === 'fail') fails++;
+    const cap = Math.floor((S.W - 20) / S.CHARW);
+    const label = fitLabel(baseName(file.p), f.s, cap);
+    // an `other` edge explains itself through its note; the rest name their kind
+    const kind = clip(f.e === 'other' && f.en ? STACK_GLYPH.other + ' ' + f.en
+                                              : (STACK_EDGE[f.e] ? t(STACK_EDGE[f.e]) : ''), S.EDGECAP);
+    const role = clip(f.r, Math.max(8, cap - (kind ? kind.length + 3 : 0)));
+    const proof = STACK_PROOF[f.proof] || STACK_PROOF.fail;
+    const tx = p.x + S.W + S.TAGX;
+    nodes += `<g data-i="${f.i}" style="cursor:pointer"><title>${esc(file.p)}${f.s ? ' : ' + esc(f.s) : ''}\n${esc(f.r)}</title>`
+      + `<rect class="flownode" x="${p.x}" y="${p.y}" width="${S.W}" height="${S.H}" rx="8" style="stroke:${CATCOLOR(file.g)}"/>`
+      + `<text class="flowt1" x="${p.x + 10}" y="${p.y + 14}">${esc(label)}</text>`
+      + `<text class="flowt2" x="${p.x + 10}" y="${p.y + 27}">`
+      + `${kind ? `<tspan style="fill:var(--accent);font-weight:700">${esc(kind)}</tspan> · ` : ''}${esc(role)}</text></g>`
+      + `<text class="flowt2" x="${tx}" y="${p.y + 14}">${esc(f.reg)}</text>`
+      + `<text class="flowt2" x="${tx}" y="${p.y + 27}" style="fill:${proof[2]};${f.proof === 'fail' ? 'font-weight:700' : ''}">`
+      + `<title>${esc(f.why)}</title>${esc(proof[0])} ${esc(t(proof[1], {edge: f.e}))}`
+      + `${/^mock:/.test(f.sr || '') ? ' · ' + esc(t('flow.stack.mocked')) : ''}</text>`;
+  }
+  return {svg: rules + edges + nodes, hdr: u.name, width,
+          sub: t('flow.stack.summary', {frames: fr.length, hops: u.hops.length, fails})};
+}
+// The one control that swaps the two Flow readings of the same use-case.
+function stackToggleSvg(x, y, toStack){
+  const label = t(toStack ? 'flow.stack.show' : 'flow.stack.hide');
+  const w = Math.max(STACK.TOGGLEW, label.length * STACK.CHARW + 24);
+  return `<g data-stacktoggle style="cursor:pointer"><rect x="${x}" y="${y}" width="${w}" height="${STACK.TOGGLEH}" rx="6" style="fill:var(--accent-soft);stroke:var(--accent);stroke-width:1"/>`
+    + `<text class="flowt1" x="${x + w / 2}" y="${y + 15}" text-anchor="middle" style="fill:var(--accent-ink);font-weight:700">${esc(label)}</text></g>`;
+}
+// --- end stack view ---
 // the Flow scene draws whichever selection `flowPick` names (the most recent one)
 function renderFlow(){
   let s = '';
-  if (flowPick === 'uc'){
+  if (flowPick === 'uc' && UCS[activeUC].frames && flowStack){
+    const st = stackSvg(UCS[activeUC]);
+    s = stackToggleSvg(0, -74, false) +
+        `<text class="classhdr" x="0" y="-34">${esc(st.hdr)}</text>` +
+        `<text class="flowt2" x="0" y="-18">${esc(st.sub)}</text>` + st.svg;
+  } else if (flowPick === 'uc'){
     // use-case flow: one row per level; the siblings of a fan share a row
     const u = UCS[activeUC];
     const levels = groupHops(u.hops);
@@ -1090,7 +1229,7 @@ function renderFlow(){
         <text class="flowt1" x="${b.x+12}" y="${b.y+19}">${esc(hopLabel(b.lv, b.k))} ${esc(label)}</text>
         <text class="flowt2" x="${b.x+12}" y="${b.y+36}">${esc(role)}</text></g>`;
     }
-    s = `<text class="classhdr" x="0" y="-18">${esc(u.name)}</text>` + s;
+    s = `<text class="classhdr" x="0" y="-18">${esc(u.name)}</text>` + (u.frames ? stackToggleSvg(0, -58, true) : '') + s;
   } else if (flowPick === 'ep'){
     // entry point: call tree from the file where execution enters
     const ep = ENTRY_POINTS[activeEp];
@@ -1107,11 +1246,11 @@ function renderFlow(){
   }
   world.innerHTML = s;
   // a new Flow source replaces the whole drawing: refit so it is actually on screen
-  const sig = flowPick === 'uc' ? 'uc:' + activeUC
+  const sig = flowPick === 'uc' ? 'uc:' + activeUC + (flowStack ? ':stack' : ':levels')
             : flowPick === 'ep' ? 'ep:' + activeEp
             : flowPick === 'tree' ? 'tree:' + treeRoot.i + ':' + (treeRoot.symbol || '')
             : '';
-  if (sig !== flowDrawn && fit()) flowDrawn = sig;   // a bailed fit stays pending, and is retried
+  if (sig !== flowDrawn && (isStackDrawn() ? fitTop() : fit())) flowDrawn = sig;   // a bailed fit stays pending, and is retried
 }
 
 // ==================== scene navigation ====================
@@ -1120,7 +1259,7 @@ function go(sc, opts={}){
   if (sc === 'file' && opts.i != null){ fileFocus = opts.i; selSym = opts.sym || null; }
   if (sc !== 'file') selSym = null;
   render();
-  fit();
+  if (isStackDrawn()) fitTop(); else fit();
   if (sc === 'file') fileDetail();
 }
 document.getElementById('bctx').onclick = ()=> go('ctx');
@@ -1156,6 +1295,20 @@ function fit(){
   k = Math.min(W/(bb.width+60), H/(bb.height+60), 2.2);
   tx = (W - bb.width*k)/2 - bb.x*k;
   ty = (H - bb.height*k)/2 - bb.y*k;
+  apply();
+  return true;
+}
+// A call stack is read top-down. Fit its width (never above 1:1) and pin the top
+// under the crumbs bar instead of shrinking the whole column into the viewport.
+function isStackDrawn(){ return scene === 'flow' && flowPick === 'uc' && activeUC >= 0 && !!UCS[activeUC].frames && flowStack; }
+function fitTop(){
+  let bb;
+  try { bb = world.getBBox(); } catch(e){ return false; }
+  const W = svg.clientWidth, H = svg.clientHeight;
+  if (!bb.width || !W) return false;
+  k = Math.min(W/(bb.width+60), 1);
+  tx = (W - bb.width*k)/2 - bb.x*k;
+  ty = 56 - bb.y*k;
   apply();
   return true;
 }
@@ -1197,7 +1350,7 @@ function dragTargetFor(el){
 }
 svg.addEventListener('pointerdown', e=>{
   // stash the target NOW: setPointerCapture retargets pointerup to the svg
-  downEl = e.target.closest('[data-hidectx],[data-i],[data-sym],[data-stub],[data-ck]');
+  downEl = e.target.closest('[data-stacktoggle],[data-hidectx],[data-i],[data-sym],[data-stub],[data-ck]');
   lastHit = downEl;
   const dt = dragTargetFor(downEl);
   if (dt){
@@ -1235,6 +1388,7 @@ svg.addEventListener('pointerup', e=>{
   const el = downEl; downEl = null;
   if (moved || !el) return;
   // the folder-hiding cross consumes the click before the box click (which navigates to Packages)
+  if (el.dataset.stacktoggle != null){ flowStack = !flowStack; renderFlow(); return; }
   if (el.dataset.hidectx != null){ hiddenCks.add(el.dataset.hidectx); saveHidden(); render(); return; }
   if (el.dataset.i != null) selectFile(+el.dataset.i);
   else if (el.dataset.sym != null){ selSym = (selSym === el.dataset.sym ? null : el.dataset.sym); paintFileEdges(); symDetail(); }
@@ -1258,7 +1412,10 @@ function selectFile(i){
   if (scene === 'pac') paintState();
   const f = F[i];
   dtitle.textContent = t('detail.file');
-  let h = `<div class="path">${esc(f.p)}</div>
+  // the way back: a file opened from a use-case's Flow (a frame-only file above all,
+  // which no reverse index lists) must not strand the reader in the file panel
+  let h = (activeUC >= 0 ? `<div class="muted" style="font-size:.72rem">${esc(t('detail.usecase'))}: <a class="filelink" data-setuc="${activeUC}">${esc(UCS[activeUC].name)}</a></div>` : '') +
+    `<div class="path">${esc(f.p)}</div>
     <div class="muted">${esc(t('detail.lines', {n:f.n}))} · <span style="color:${CATCOLOR(f.g)}">●</span> ${esc((catInfo.get(f.g)||{}).label||f.g)}</div>
     <button class="opensym" data-open="${i}">${esc(t('detail.open_symbols'))}</button>`;
   if (activeUC >= 0){
@@ -1415,6 +1572,10 @@ function setUC(j, opts={}){
           <span class="hopn">${order.get(h.i)||'·'}</span>
           <span><span class="hr-sym">${esc(baseName(F[h.i].p))}${h.s? ' : '+esc(h.s):''}</span><br>
           <span class="hr-role">${esc(h.r)}</span></span></div>`).join('') +
+      (u.frames ? `<h3>${esc(t('detail.frames', {n:u.frames.length}))}</h3>` + u.frames.map(f => `<div class="hoprow" data-hop="${f.i}" style="margin-left:${f.d * 10}px">
+          <span class="hopn" style="${f.e !== 'call' ? 'color:var(--accent)' : ''}">${esc(STACK_GLYPH[f.e] || '\u00B7')}</span>
+          <span><span class="hr-sym">${esc(baseName(F[f.i].p))}${f.s ? ' : ' + esc(f.s) : ''}</span> <span class="muted" style="font-size:.62rem">${esc(f.reg)}</span><br>
+          <span class="hr-role">${esc(f.r)}</span></span></div>`).join('') : '') +
       (u.rules.length ? `<h3>${esc(t('detail.rules'))}</h3><div class="sym muted">${esc(u.rules.join(', '))}</div>` : '');
   } else if (selected < 0){
     dtitle.textContent = t('detail.title');
@@ -1584,6 +1745,6 @@ document.getElementById('commitline').textContent =
 refreshUCChips();
 render();
 fit();
-window.addEventListener('resize', fit);
+window.addEventListener('resize', () => isStackDrawn() ? fitTop() : fit());
 })();
 </script>

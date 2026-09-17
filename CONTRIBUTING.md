@@ -71,6 +71,24 @@ declared it (`docs/data-contract.md`, section 6.2). Declaring an entry point on 
 (`views.py:BookViewSet.list`) of a class the parser registered gives a second,
 method-level entry that shares the class's route.
 
+#### Optional: the call stack behind the hops
+
+`hops` is the story of the flow; `frames` is the same flow as the call stack it really
+is, including the steps the story skipped. It is an array of objects, each with an `id`,
+the `parent` that called it, an `edge` saying how (`entry`, `call`, `queue`,
+`on_commit`, `worker`, `inbound`, `other`) and a `hop` citation of the grammar above.
+The pipeline derives the depth, caps each frame's status at the use-case's and checks
+every edge against the import graph; `--strict` fails on a hop no frame cites. The full
+key list and the five edge-proof states are in `docs/data-contract.md` sections 4.4 and
+7.4, with a worked example under `tests/fixtures/stack-frames/`.
+
+Frames are a **derived reading of the code, not a second thing to curate**: they are
+produced outside this repository (by an agent or a script reading the code — no generator
+ships here) and re-produced whenever a file one of the use-case's hops cites changes.
+`--strict` catches a frame whose file is gone and a hop no frame cites; it does not catch
+a renamed symbol (a warning) or a `fail` edge (a red row to read). Leave the key out
+entirely and nothing about your build changes.
+
 #### What `prep_data.py` checks — and what it does not
 
 - It resolves the hop's **file** against the graph. A hop whose file does not resolve is

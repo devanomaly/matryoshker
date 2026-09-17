@@ -1,0 +1,42 @@
+{
+  "scriptCompleted": true,
+  "stats": {
+    "filesScanned": 16,
+    "filesWithImports": 6,
+    "totalEdges": 10
+  },
+  "importMap": {
+    "orders/__init__.py": [
+      "orders/services/checkout.py"
+    ],
+    "orders/api/__init__.py": [],
+    "orders/api/views.py": [
+      "orders/common/mixins.py",
+      "orders/services/checkout.py"
+    ],
+    "orders/common/__init__.py": [],
+    "orders/common/hooks.py": [],
+    "orders/common/mixins.py": [],
+    "orders/common/queue.py": [],
+    "orders/gateway/__init__.py": [],
+    "orders/gateway/payments.py": [],
+    "orders/models/__init__.py": [
+      "orders/models/order.py"
+    ],
+    "orders/models/order.py": [],
+    "orders/services/__init__.py": [
+      "orders/services/checkout.py"
+    ],
+    "orders/services/checkout.py": [
+      "orders/common/hooks.py",
+      "orders/common/queue.py",
+      "orders/gateway/payments.py",
+      "orders/models/order.py"
+    ],
+    "orders/tasks/__init__.py": [],
+    "orders/tasks/notify.py": [],
+    "orders/tasks/worker.py": [
+      "orders/common/queue.py"
+    ]
+  }
+}
