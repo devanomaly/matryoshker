@@ -156,7 +156,7 @@ repo+commit) — o botão de export é a ponte do rascunho de volta ao repo, via
   irmãos rotulados `Na`, `Nb`, `Nc` no nível N, reconvergência no N+1. Registro sem
   prefixo nenhum tem um hop por nível, então continua numerado `1..N` como antes.
   Arestas de leque são sólidas; as arestas de *entrada* de um hop `costura:` são
-  tracejadas. Detalhes e o exemplo em [`docs/data-contract.md`](../data-contract.md) §5.1.
+  tracejadas. Detalhes e o exemplo em [`docs/data-contract.md`](../../data-contract.md) §5.1.
 
 ## Limites conhecidos (v1.3)
 
