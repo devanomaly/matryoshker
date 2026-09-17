@@ -235,10 +235,13 @@ def hops_without_frame(hops, hop_raw, frames, files):
     """Every hop of a use-case that no frame cites, as (raw hop, explanation).
 
     Every hop is a frame; not every frame is a hop. A hop matches a frame when both
-    cite the same file and the same symbol; a hop with no symbol matches any frame
-    of its file.
+    cite the same file and the same symbol. The hop may be the coarser of the two: a
+    hop citing `A` matches a frame citing `A.b`, and a hop with no symbol matches any
+    frame of its file. The converse does not hold.
     """
     pairs = {(f['i'], f['s']) for f in frames}
+    # `A.b` also answers for `A`: the story names the class, the stack names the method.
+    pairs |= {(i, s.rsplit('.', 1)[0]) for i, s in pairs if '.' in s}
     anywhere = {f['i'] for f in frames}
     missing = []
     for hop, raw in zip(hops, hop_raw):

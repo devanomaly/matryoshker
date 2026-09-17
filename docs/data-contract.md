@@ -333,7 +333,9 @@ process. An unknown edge is coerced to `other` with a warning (§11).
 **An inherited method cites the class that declares it.** A view that inherits
 `record_audit` from a mixin gets a frame citing `common/mixins.py:AuditMixin`, with
 `record_audit` in `role` — the citation must name a symbol the file really declares,
-or §5.4 warns about it.
+or §5.4 warns about it. When the declaring class lives outside the repository (a
+framework base class), there is no file to cite: the frame cites the inheriting class
+alone, again with the method in `role`.
 
 **No line numbers.** A citation is `path:Symbol`, never `path:120`. A line moves with
 the next edit; the evidence for an edge (which line of the parent calls the child)
@@ -833,8 +835,11 @@ not in the structure — a dynamic dispatch, an import inside a function body, o
 that is simply wrong.
 
 **The invariant: every hop is a frame; not every frame is a hop.** A hop matches a frame
-when both cite the same file index and the same symbol; a hop whose citation had no
-symbol matches any frame of that file. A hop no frame cites is reported on stderr
+when both cite the same file index and the same symbol. The hop may be the coarser of
+the two — a story names the class, a stack names the method: a hop citing `A` matches a
+frame citing `A.b`, and a hop whose citation had no symbol matches any frame of that
+file. The converse does not hold: a hop citing `A.b` is not matched by a frame citing
+only `A`. A hop no frame cites is reported on stderr
 (§5.5 shape, §11 line kinds) and, under `--strict`, exits 3 like a dropped citation. The
 converse is not checked: a frame the flat registry never mentioned is the point of the
 feature. The check applies only to use-cases that carry `frames`.

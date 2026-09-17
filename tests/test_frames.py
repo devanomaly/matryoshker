@@ -303,6 +303,43 @@ def test_a_hop_without_a_symbol_matches_any_frame_of_its_file(extraction, tmp_pa
     assert 'hop without frame' not in capsys.readouterr().err
 
 
+def test_a_hop_citing_a_class_matches_a_frame_citing_one_of_its_methods(
+        extraction, tmp_path, capsys):
+    """A hop is told at the grain of the story, a frame at the grain of the call."""
+    registry = write_registry(tmp_path, one_uc(
+        hops=['orders/services/checkout.py:CheckoutService — the central rule'],
+        frames=[{'id': 'A', 'parent': None, 'edge': 'entry',
+                 'hop': 'orders/services/checkout.py:CheckoutService.place'}]))
+    _, totals = build(extraction, registry)
+    assert totals['unframed_hops'] == 0
+    assert 'hop without frame' not in capsys.readouterr().err
+
+
+def test_a_class_hop_is_not_matched_by_a_class_that_merely_starts_with_its_name(
+        extraction, tmp_path, capsys):
+    registry = write_registry(tmp_path, one_uc(
+        hops=['orders/models/order.py:Order — the aggregate'],
+        frames=[{'id': 'A', 'parent': None, 'edge': 'entry',
+                 'hop': 'orders/models/order.py:OrderLine.total'}]))
+    _, totals = build(extraction, registry)
+    assert totals['unframed_hops'] == 1
+    assert 'hop without frame [no frame cites orders/models/order.py:Order]' in (
+        capsys.readouterr().err)
+
+
+def test_a_hop_citing_a_method_is_not_matched_by_a_frame_citing_only_its_class(
+        extraction, tmp_path, capsys):
+    """The coarser side may be the hop, never the frame."""
+    registry = write_registry(tmp_path, one_uc(
+        hops=['orders/services/checkout.py:CheckoutService.place — the central rule'],
+        frames=[{'id': 'A', 'parent': None, 'edge': 'entry',
+                 'hop': 'orders/services/checkout.py:CheckoutService'}]))
+    _, totals = build(extraction, registry)
+    assert totals['unframed_hops'] == 1
+    assert ('hop without frame [no frame cites '
+            'orders/services/checkout.py:CheckoutService.place]') in capsys.readouterr().err
+
+
 def test_a_frame_that_is_not_a_hop_is_never_reported(extraction, capsys):
     """Not every frame is a hop: that asymmetry is the point of the feature."""
     ucs, totals = build(extraction, USECASES)
