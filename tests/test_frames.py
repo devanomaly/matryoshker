@@ -390,6 +390,25 @@ def test_an_entry_edge_with_a_parent_warns(extraction, tmp_path, capsys):
     assert 'warning: UC UC: frame B: edge "entry" on a frame that has a parent' in capsys.readouterr().err
 
 
+def test_an_unknown_edge_without_a_note_is_warned_about_once(extraction, tmp_path, capsys):
+    registry = write_registry(tmp_path, one_uc(frames=[
+        {'id': 'A', 'parent': None, 'edge': 'entry', 'hop': VIEW},
+        {'id': 'B', 'parent': 'A', 'edge': 'rpc', 'hop': SERVICE}]))
+    build(extraction, registry)
+    warnings = [ln for ln in capsys.readouterr().err.splitlines() if ln.startswith('warning:')]
+    assert warnings == ['warning: UC UC: frame B: unknown edge "rpc", using "other"'], (
+        'the author never wrote "other": the missing note is not theirs to be blamed for')
+
+
+def test_a_dropped_frame_is_not_warned_about(extraction, tmp_path, capsys):
+    registry = write_registry(tmp_path, one_uc(frames=[
+        {'id': 'B', 'parent': 'gone', 'edge': 'entry', 'hop': SERVICE}]))
+    build(extraction, registry)
+    stderr = capsys.readouterr().err
+    assert 'dropped [parent "gone" not in frames]' in stderr
+    assert 'warning:' not in stderr
+
+
 def test_the_committed_fixture_triggers_none_of_those_warnings(extraction, capsys):
     build(extraction, USECASES)
     assert 'warning:' not in capsys.readouterr().err
@@ -410,29 +429,37 @@ def text_of(path):
 
 
 def contract_slice(start, end):
+    """The contract text between two anchors, failing with the anchor's name."""
     text = text_of(CONTRACT)
-    begin = text.index(start)
-    return text[begin:text.index(end, begin + len(start))]
+    begin = text.find(start)
+    assert begin >= 0, f'anchor not found in docs/data-contract.md: {start!r}'
+    stop = text.find(end, begin + len(start))
+    assert stop >= 0, f'anchor not found in docs/data-contract.md after {start!r}: {end!r}'
+    return text[begin:stop]
+
+
+# First cell of a table row holding one backticked word, padding tolerated.
+ROW_KEY = re.compile(r'^\|\s*`(\w+)`\s*\|', re.M)
 
 
 def js_object_keys(name):
     """The keys of the top-level `const <name> = {...};` literal of the viewer."""
     match = re.search(r'const %s = \{(.*?)\};' % name, text_of(TEMPLATE), re.S)
     assert match, f'const {name} not found in viewer/template.html'
-    return re.findall(r"(\w+)\s*:\s*[\['\"]", match.group(1))
+    return re.findall(r"['\"]?(\w+)['\"]?\s*:\s*[\['\"]", match.group(1))
 
 
 def test_the_contract_key_table_lists_exactly_the_emitted_keys():
     table = contract_slice('#### `ucs[].frames`', 'Those fourteen keys')
-    documented = re.findall(r'^\| `(\w+)` \|', table, re.M)
+    documented = ROW_KEY.findall(table)
     assert tuple(documented) == prep_data.FRAME_KEYS, (
         'docs/data-contract.md 7.4 must list the emitted frame keys exactly, in order')
     assert len(prep_data.FRAME_KEYS) == 14, 'the contract says "fourteen keys"'
 
 
 def test_the_contract_proof_table_lists_exactly_the_proof_states():
-    table = contract_slice('**The five proof states**', '`fail` is the only red state')
-    documented = re.findall(r'^\| `(\w+)` \|', table, re.M)
+    table = contract_slice('The five proof states', '`fail` is the only red state')
+    documented = ROW_KEY.findall(table)
     assert documented[0] == 'proof', 'the header cell of the table'
     assert tuple(documented[1:]) == prep_data.FRAME_PROOFS
     assert len(prep_data.FRAME_PROOFS) == 5, 'the contract says "five proof states"'
@@ -446,7 +473,8 @@ def test_the_fixture_reaches_exactly_the_declared_proof_states(extraction):
 
 def test_the_contract_names_exactly_the_edge_kinds():
     paragraph = contract_slice('**Edge kinds.**', '`worker` and `inbound` reopen')
-    assert tuple(re.findall(r'`(\w+)` \(', paragraph)) == prep_data.FRAME_EDGES
+    # `kind` (what it means): the gloss may start on the next line after a rewrap
+    assert tuple(re.findall(r'`(\w+)`\s+\(', paragraph)) == prep_data.FRAME_EDGES
 
 
 def test_the_schema_edge_enum_is_the_pipeline_edge_list():

@@ -191,6 +191,8 @@ def frame_depth(frame, by_id):
     depth, current = 0, frame
     while current['parent'] and current['e'] not in FRAME_REOPEN_EDGES:
         depth += 1
+        if depth > len(by_id):  # unreachable while build_frames drops unrooted frames
+            raise ValueError(f'frame {frame["id"]}: parent chain does not end')
         current = by_id[current['parent']]
     return depth
 
@@ -263,7 +265,7 @@ def build_frames(uc, resolved, files, find_file, imports, totals):
         return None
 
     name = uc['name']
-    frames, citation_of, dropped, notes = [], {}, [], []
+    frames, citation_of, dropped, notes, bent = [], {}, [], [], {}
     for raw in raw_frames:
         if not isinstance(raw, dict):
             dropped.append((str(raw), 'frame must be an object'))
@@ -280,19 +282,18 @@ def build_frames(uc, resolved, files, find_file, imports, totals):
         if hop is None:
             dropped.append((citation, reason))
             continue
-        edge = raw.get('edge') or 'call'
+        edge, coerced = raw.get('edge') or 'call', False
         if edge not in FRAME_EDGES:
             warn(f'warning: UC {name}: frame {frame_id}: unknown edge "{edge}", using "other"')
-            edge = 'other'
+            edge, coerced = 'other', True
         parent_id = str(raw.get('parent') or '') or None
-        if edge == 'other' and not str(raw.get('edge_note') or '').strip():
-            warn(f'warning: UC {name}: frame {frame_id}: edge "other" without an edge_note')
+        bent[frame_id] = []
+        if edge == 'other' and not coerced and not str(raw.get('edge_note') or '').strip():
+            bent[frame_id].append('edge "other" without an edge_note')
         if edge == 'entry' and parent_id:
-            warn(f'warning: UC {name}: frame {frame_id}: edge "entry" on a frame that has '
-                 f'a parent')
+            bent[frame_id].append('edge "entry" on a frame that has a parent')
         if LINE_REF.match(hop['s']):
-            warn(f'warning: UC {name}: frame {frame_id}: line reference "{hop["s"]}" in a '
-                 f'frame citation')
+            bent[frame_id].append(f'line reference "{hop["s"]}" in a frame citation')
         note = unverified_symbol(hop['s'], files[hop['i']])
         if note:
             notes.append((citation, note))
@@ -325,6 +326,11 @@ def build_frames(uc, resolved, files, find_file, imports, totals):
                         f'parent chain of "{frame["id"]}" never reaches a root'))
         del by_id[frame['id']]
     frames = [f for f in frames if f['id'] in by_id]
+
+    # Rules of 4.4 that were bent: said once, and only about a frame that is drawn.
+    for frame in frames:
+        for complaint in bent[frame['id']]:
+            warn(f'warning: UC {name}: frame {frame["id"]}: {complaint}')
 
     edge_set = {(source, target) for source, target in imports}
     for frame in frames:

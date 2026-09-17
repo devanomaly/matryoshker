@@ -211,4 +211,3 @@ def test_a_resize_keeps_the_stack_pinned_to_the_top(viewer_template):
     assert handler, 'resize handler not found'
     assert re.search(r'isStackDrawn\(\)\s*\?\s*fitTop\(\)\s*:\s*fit\(\)', handler.group(1)), (
         'the resize handler must dispatch on isStackDrawn(), got: ' + handler.group(1))
-
