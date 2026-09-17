@@ -526,7 +526,9 @@ for (const [s0,t0] of IMP){
   (inAdj.get(t0) ?? inAdj.set(t0,[]).get(t0)).push(s0);
 }
 
-// reverse index file -> use-cases (join on hops[].i; precision = file level)
+// reverse index file -> use-cases (join on hops[].i; precision = file level).
+// Hops only, on purpose: frames are derived, and would inflate a curated signal
+// (data-contract 7.4). tests/test_viewer.py pins it.
 const ucByFile = new Map();
 UCS.forEach((u,j)=>{
   for (const h of u.hops){
@@ -1410,7 +1412,10 @@ function selectFile(i){
   if (scene === 'pac') paintState();
   const f = F[i];
   dtitle.textContent = t('detail.file');
-  let h = `<div class="path">${esc(f.p)}</div>
+  // the way back: a file opened from a use-case's Flow (a frame-only file above all,
+  // which no reverse index lists) must not strand the reader in the file panel
+  let h = (activeUC >= 0 ? `<div class="muted" style="font-size:.72rem">${esc(t('detail.usecase'))}: <a class="filelink" data-setuc="${activeUC}">${esc(UCS[activeUC].name)}</a></div>` : '') +
+    `<div class="path">${esc(f.p)}</div>
     <div class="muted">${esc(t('detail.lines', {n:f.n}))} · <span style="color:${CATCOLOR(f.g)}">●</span> ${esc((catInfo.get(f.g)||{}).label||f.g)}</div>
     <button class="opensym" data-open="${i}">${esc(t('detail.open_symbols'))}</button>`;
   if (activeUC >= 0){

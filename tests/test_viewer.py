@@ -302,3 +302,31 @@ def test_fit_reports_whether_it_applied_a_transform(tmp_path, viewer_template):
     proc = subprocess.run(['node', str(script)], capture_output=True, text=True)
     assert proc.returncode == 0, (
         'fit() must return true exactly when it applied a transform:\n' + proc.stderr)
+
+
+def test_the_file_panel_links_back_to_the_active_use_case(viewer_template):
+    """Clicking a node of the Flow scene swaps the detail panel for the file's. With a
+    use-case active the panel must open with a link that repaints the use-case panel in
+    one click — for a file that is only a frame it is the ONLY way back, because such a
+    file never appears under "Use-cases passing here" (data-contract 7.4, 13.5)."""
+    with open(viewer_template, encoding='utf-8') as fh:
+        html = fh.read()
+    fn = extract_function(html, 'selectFile(i)')
+    link = re.search(r'activeUC\s*>=\s*0\s*\?[^;]*?data-setuc="\$\{activeUC\}"', fn, re.S)
+    assert link, ('selectFile must render a data-setuc link to the ACTIVE use-case, '
+                  'guarded by activeUC >= 0')
+    assert "t('detail.usecase')" in link.group(0), 'labelled through UI_STRINGS, not a literal'
+    assert fn.index('data-setuc="${activeUC}"') < fn.index("t('detail.open_symbols')"), (
+        'the way back sits at the top of the panel, above the file actions')
+
+
+def test_the_reverse_index_is_joined_on_hops_only(viewer_template):
+    """Frames are derived; hops are curated. "Use-cases passing here" and the use-case
+    count of the Stars ranking stay a curated signal, so ucByFile never reads frames
+    (data-contract 7.4)."""
+    with open(viewer_template, encoding='utf-8') as fh:
+        html = fh.read()
+    block = re.search(r'const ucByFile = new Map\(\);\n(.*?)\n\}\);', html, re.S)
+    assert block, 'the ucByFile construction was not found'
+    assert re.search(r'for\s*\(const \w+ of u\.hops\)', block.group(1)), 'joined on u.hops'
+    assert 'frames' not in block.group(1), 'frames must not feed the reverse index'

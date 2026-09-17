@@ -857,6 +857,15 @@ object is dropped (`frame must be an object`), and so is a frame without an `id`
 toward `--strict`. `worker` and `inbound` restart the depth at 0 but are still frames of
 their parent's stack: they need a parent chain that reaches a root like any other.
 
+**Frames do not feed the reverse index.** `ucByFile` — and with it *Use-cases passing
+here* and the use-case count of the Stars ranking (13.6) — is joined on `hops[].i` alone.
+Hops are what an author chose to tell; frames are derived from the code, and counting
+them would turn a curated signal into a measure of how deep a call stack happens to be. A
+file that appears only as a frame is therefore reachable from the stack view and from the
+detail panel's frame list, but clicking it on the map does not list the use-case under
+*Use-cases passing here*. The file panel's link back to the active use-case (13.5) is
+what keeps that click from being a dead end.
+
 ---
 
 ## 8. `extra.json` — output of `prep_extra.py` — and injection
@@ -1371,6 +1380,12 @@ source follows whatever is left.
   prefix visible, because that is what an author needs when correcting the file. With
   frames it adds a second, indented list under `detail.frames`, one row per frame with
   its edge glyph and its `reg` text.
+- Clicking a node of the Flow scene (a level box or a stack row) opens that file's panel
+  in place of the use-case's. While a use-case is active, the file panel opens with
+  `detail.usecase` and a link carrying the use-case's name; one click repaints the
+  use-case panel, and in the Flow scene the drawing, the stack toggle and the zoom stay as
+  they were. From the Symbols scene the same link returns to Packages first, as selecting
+  a use-case always has.
 - The map overlay applies the same level grouping, but it is file-level and dedups
   consecutive hops of the same file, so a fan whose siblings share the selector's file
   does not appear there (§5.1).
