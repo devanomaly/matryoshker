@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-09-18
+
+### Added
+
 - **Added — call-stack frames for a use-case.** A registry entry may now carry `frames`
   beside its `hops`: the same flow, told as the call stack it really is, each frame
   naming the frame that called it and how (`entry`, `call`, `queue`, `on_commit`,
@@ -43,16 +47,6 @@ All notable changes to this project are documented in this file.
   `Loan`, written with the `branch:` and `seam:` role prefixes so the demo — and the
   README's second screenshot — shows a Flow fan (`3a`, `3b`, `3c`) and a dashed seam
   edge. The demo build now reports `ucs=6 hops=38` and `entry_points=9`.
-
-- **Fixed — the Flow scene now follows the selection you made last.** With a use-case
-  active, choosing an entry point (or *call tree from here* in the Symbols scene) updated
-  the crumb, the detail panel and the sidebar highlight while Flow kept drawing the
-  use-case chain. The use-case overlay and the entry-point lens still coexist everywhere
-  else — Context keeps its documented lens precedence — and clearing one makes Flow fall
-  back to the other. Clicking an entry point while the Flow scene is open now redraws Flow
-  in place instead of jumping to Packages, and a new Flow source refits the view. See
-  `docs/data-contract.md` section 13.4.
-### Added
 
 - **Visual review harness** (`tools/visual_review.py`): one command builds the bundled
   fixture with both bundled configs and drives the result in a real browser, writing a
